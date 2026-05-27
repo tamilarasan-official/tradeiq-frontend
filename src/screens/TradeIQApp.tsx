@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
+import { StatusBar, StyleSheet } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { colors } from '../theme/colors';
@@ -10,10 +11,12 @@ const store = configureStore({ reducer: {} });
 export default function TradeIQApp() {
   return (
     <Provider store={store}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
-      <SafeAreaView style={styles.safeArea}>
-        <MobileShell />
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+          <MobileShell />
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Provider>
   );
 }
@@ -39,7 +42,12 @@ function MobileShell() {
     });
   }
 
-  return <ActiveScreen onBack={goBack} onNavigate={navigate} />;
+  function logout() {
+    setHistory([]);
+    setCurrentScreenId(5);
+  }
+
+  return <ActiveScreen onBack={goBack} onNavigate={navigate} onLogout={logout} />;
 }
 
 const styles = StyleSheet.create({

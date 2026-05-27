@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -8,7 +8,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { placePaperOrder, searchStocks } from '../../services/api';
+import {
+  DashboardData,
+  ProfileData,
+  getDashboardData,
+  getProfileData,
+  placePaperOrder,
+  searchStocks,
+} from '../../services/api';
 import { registerFcmToken, signInWithGoogle } from '../../services/firebase';
 import { colors } from '../../theme/colors';
 import type { ScreenSpec } from '../../types/screens';
@@ -18,12 +25,45 @@ type Props = {
   screen: ScreenSpec;
   onBack: () => void;
   onNavigate: (screenId: number) => void;
+  onLogout?: () => void;
 };
 
-export function BaseSpecScreen({ screen, onBack, onNavigate }: Props) {
+export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) {
   const [formState, setFormState] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Array<{ symbol: string; companyName: string; ltp: number; changePercent: number }>>([]);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadData() {
+      try {
+        const [dashboardData, profileData] = await Promise.all([
+          getDashboardData(),
+          getProfileData(),
+        ]);
+
+        if (mounted) {
+          setDashboard(dashboardData);
+          setProfile(profileData);
+        }
+      } catch {
+        if (mounted) {
+          showToast('Unable to load live app data');
+        }
+      }
+    }
+
+    if (screen.id !== 5) {
+      loadData();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [screen.id]);
 
   async function handleAction(action: string) {
     setLoading(true);
@@ -152,12 +192,35 @@ export function BaseSpecScreen({ screen, onBack, onNavigate }: Props) {
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{screenTitle(screen.name)}</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.profileButton} onPress={() => onNavigate(13)}>
+            <Text style={styles.profileButtonText}>Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => {
+              showToast('Logged out');
+              onLogout?.();
+            }}
+          >
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Hero screen={screen} />
+        <Hero screen={screen} dashboard={dashboard} />
 
-        {renderScreenBody(screen, formState, setFormState, results, onNavigate, handleFcmSetup)}
+        {renderScreenBody(
+          screen,
+          formState,
+          setFormState,
+          results,
+          onNavigate,
+          handleFcmSetup,
+          dashboard,
+          profile,
+        )}
 
         <View style={styles.actionGrid}>
           {screen.actions.map(action => (
@@ -182,12 +245,16 @@ export function BaseSpecScreen({ screen, onBack, onNavigate }: Props) {
   );
 }
 
-function Hero({ screen }: { screen: ScreenSpec }) {
+function Hero({ screen, dashboard }: { screen: ScreenSpec; dashboard: DashboardData | null }) {
   if ([9, 11, 15, 20, 22, 23, 24].includes(screen.id)) {
     return (
       <View style={styles.heroCard}>
         <Text style={styles.heroLabel}>{screenTitle(screen.name)}</Text>
-        <Text style={styles.heroValue}>{screen.primaryMetric ?? '+INR 12,420'}</Text>
+        <Text style={styles.heroValue}>
+          {screen.id === 9
+            ? dashboard?.summary.primaryMetric ?? 'Loading...'
+            : screen.primaryMetric ?? 'Loading...'}
+        </Text>
       </View>
     );
   }
@@ -202,6 +269,8 @@ function renderScreenBody(
   results: Array<{ symbol: string; companyName: string; ltp: number; changePercent: number }>,
   onNavigate: (screenId: number) => void,
   handleFcmSetup: () => void,
+  dashboard: DashboardData | null,
+  profile: ProfileData | null,
 ) {
   if (screen.id === 6) {
     return (
@@ -234,34 +303,41 @@ function renderScreenBody(
     return (
       <>
         <View style={styles.grid}>
-          <InfoTile title="Invested" value="INR 7,90,000" />
-          <InfoTile title="Current" value="INR 8,42,500" tone="positive" />
+          <InfoTile title="Invested" value={dashboard?.summary.invested ?? 'Loading...'} />
+          <InfoTile title="Current" value={dashboard?.summary.current ?? 'Loading...'} tone="positive" />
         </View>
-        <MarketList onNavigate={onNavigate} />
-        <OrderList />
+        <MarketList onNavigate={onNavigate} watchlist={dashboard?.watchlist ?? []} />
+        <OrderList orders={dashboard?.orders ?? []} />
       </>
     );
   }
 
   if (screen.id === 10) {
-    return <MarketList onNavigate={onNavigate} />;
+    return <MarketList onNavigate={onNavigate} watchlist={dashboard?.watchlist ?? []} />;
   }
 
   if ([11, 20].includes(screen.id)) {
-    return <HoldingsList onNavigate={onNavigate} />;
+    return <HoldingsList onNavigate={onNavigate} holdings={dashboard?.holdings ?? []} />;
   }
 
   if (screen.id === 12) {
-    return <OrderList />;
+    return <OrderList orders={dashboard?.orders ?? []} />;
   }
 
   if (screen.id === 13) {
     return (
-      <View style={styles.grid}>
-        <InfoTile title="KYC" value="Pending" />
-        <InfoTile title="Study group" value="APP" />
-        <InfoTile title="Security" value="Enabled" tone="positive" />
-      </View>
+      <>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{profile?.fullName ?? 'Loading profile...'}</Text>
+          <Text style={styles.mutedText}>{profile?.email ?? ''}</Text>
+          <Text style={styles.mutedText}>{profile?.mobile ?? ''}</Text>
+        </View>
+        <View style={styles.grid}>
+          <InfoTile title="KYC" value={profile?.kycStatus ?? 'Loading...'} />
+          <InfoTile title="Study group" value={profile?.studyGroup ?? 'Loading...'} />
+          <InfoTile title="Security" value={profile?.securityStatus ?? 'Loading...'} tone="positive" />
+        </View>
+      </>
     );
   }
 
@@ -342,23 +418,25 @@ function Input({
   );
 }
 
-function MarketList({ onNavigate }: { onNavigate: (screenId: number) => void }) {
+function MarketList({
+  onNavigate,
+  watchlist,
+}: {
+  onNavigate: (screenId: number) => void;
+  watchlist: DashboardData['watchlist'];
+}) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Watchlist</Text>
-      {[
-        ['RELIANCE', '2,850.00', '+1.20%'],
-        ['TCS', '4,025.40', '-0.42%'],
-        ['INFY', '1,510.10', '+0.76%'],
-      ].map(([symbol, price, change]) => (
-        <TouchableOpacity key={symbol} style={styles.listRow} onPress={() => onNavigate(15)}>
+      {watchlist.map(item => (
+        <TouchableOpacity key={item.symbol} style={styles.listRow} onPress={() => onNavigate(15)}>
           <View>
-            <Text style={styles.symbol}>{symbol}</Text>
-            <Text style={styles.mutedText}>NSE</Text>
+            <Text style={styles.symbol}>{item.symbol}</Text>
+            <Text style={styles.mutedText}>{item.exchange}</Text>
           </View>
           <View style={styles.alignRight}>
-            <Text style={styles.price}>{price}</Text>
-            <Text style={change.startsWith('+') ? styles.positive : styles.negative}>{change}</Text>
+            <Text style={styles.price}>{item.price}</Text>
+            <Text style={item.change.startsWith('+') ? styles.positive : styles.negative}>{item.change}</Text>
           </View>
         </TouchableOpacity>
       ))}
@@ -366,42 +444,40 @@ function MarketList({ onNavigate }: { onNavigate: (screenId: number) => void }) 
   );
 }
 
-function HoldingsList({ onNavigate }: { onNavigate: (screenId: number) => void }) {
+function HoldingsList({
+  onNavigate,
+  holdings,
+}: {
+  onNavigate: (screenId: number) => void;
+  holdings: DashboardData['holdings'];
+}) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Holdings</Text>
-      {[
-        ['RELIANCE', '10 qty', '+8.3%'],
-        ['TCS', '3 qty', '-1.2%'],
-        ['INFY', '5 qty', '+4.1%'],
-      ].map(([symbol, qty, pnl]) => (
-        <TouchableOpacity key={symbol} style={styles.listRow} onPress={() => onNavigate(15)}>
+      {holdings.map(item => (
+        <TouchableOpacity key={item.symbol} style={styles.listRow} onPress={() => onNavigate(15)}>
           <View>
-            <Text style={styles.symbol}>{symbol}</Text>
-            <Text style={styles.mutedText}>{qty}</Text>
+            <Text style={styles.symbol}>{item.symbol}</Text>
+            <Text style={styles.mutedText}>{item.quantity}</Text>
           </View>
-          <Text style={pnl.startsWith('+') ? styles.positive : styles.negative}>{pnl}</Text>
+          <Text style={item.pnl.startsWith('+') ? styles.positive : styles.negative}>{item.pnl}</Text>
         </TouchableOpacity>
       ))}
     </View>
   );
 }
 
-function OrderList() {
+function OrderList({ orders }: { orders: DashboardData['orders'] }) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Orders</Text>
-      {[
-        ['RELIANCE', 'BUY x 10', 'COMPLETE'],
-        ['TCS', 'SELL x 2', 'OPEN'],
-        ['INFY', 'BUY x 5', 'PENDING'],
-      ].map(([symbol, detail, status]) => (
-        <View key={`${symbol}-${status}`} style={styles.listRow}>
+      {orders.map(item => (
+        <View key={`${item.symbol}-${item.status}`} style={styles.listRow}>
           <View>
-            <Text style={styles.symbol}>{symbol}</Text>
-            <Text style={styles.mutedText}>{detail}</Text>
+            <Text style={styles.symbol}>{item.symbol}</Text>
+            <Text style={styles.mutedText}>{item.detail}</Text>
           </View>
-          <Text style={styles.statusPill}>{status}</Text>
+          <Text style={styles.statusPill}>{item.status}</Text>
         </View>
       ))}
     </View>
@@ -486,7 +562,39 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   backText: { color: colors.textStrong, fontWeight: '900' },
-  headerTitle: { color: colors.textStrong, fontSize: 18, fontWeight: '900' },
+  headerTitle: {
+    color: colors.textStrong,
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  profileButton: {
+    backgroundColor: colors.surface2,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  profileButtonText: {
+    color: colors.textStrong,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  logoutButton: {
+    backgroundColor: 'rgba(255,77,77,0.14)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  logoutText: {
+    color: colors.sell,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   content: { padding: 16, paddingBottom: 40 },
   loginContent: {
     flexGrow: 1,

@@ -38,6 +38,50 @@ export async function searchStocks(query: string) {
   }>;
 }
 
+export type DashboardData = {
+  summary: {
+    title: string;
+    primaryMetric: string;
+    invested: string;
+    current: string;
+  };
+  watchlist: Array<{
+    symbol: string;
+    exchange: string;
+    price: string;
+    change: string;
+  }>;
+  holdings: Array<{
+    symbol: string;
+    quantity: string;
+    pnl: string;
+  }>;
+  orders: Array<{
+    symbol: string;
+    detail: string;
+    status: string;
+  }>;
+};
+
+export type ProfileData = {
+  fullName: string;
+  email: string;
+  mobile: string;
+  kycStatus: string;
+  studyGroup: string;
+  securityStatus: string;
+};
+
+export async function getDashboardData() {
+  const response = await api.get<{ data: DashboardData }>('/api/dashboard');
+  return response.data.data;
+}
+
+export async function getProfileData() {
+  const response = await api.get<{ data: ProfileData }>('/api/profile/me');
+  return response.data.data;
+}
+
 export async function placePaperOrder(input: {
   userId: string;
   symbol: string;

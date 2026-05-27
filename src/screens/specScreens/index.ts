@@ -34,6 +34,7 @@ import { ResearchSettingsScreen } from './ResearchSettingsScreen';
 type ScreenProps = {
   onBack: () => void;
   onNavigate: (screenId: number) => void;
+  onLogout: () => void;
 };
 
 export const screenRegistry: Record<number, ComponentType<ScreenProps>> = {
