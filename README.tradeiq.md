@@ -31,3 +31,16 @@ src/
   theme/
   types/
 ```
+
+## Firebase Auth and FCM
+
+Firebase Android config lives at `android/app/google-services.json`.
+
+Google Sign-In needs one extra Firebase Console step before it can return an ID token:
+
+1. Add your Android debug/release SHA-1 and SHA-256 fingerprints in Firebase project settings.
+2. Download a fresh `google-services.json` after adding fingerprints.
+3. Enable Google provider in Firebase Authentication.
+4. Copy the Web client ID from Firebase/Google Cloud OAuth client settings into `src/services/firebase.ts` as `webClientId`.
+
+FCM is wired in `src/services/firebase.ts`. The app requests notification permission, gets the FCM token, and logs it through the backend research event endpoint. For production notifications, add a backend model/table for device tokens and send messages through Firebase Admin SDK.

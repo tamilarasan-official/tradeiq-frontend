@@ -11,8 +11,10 @@ import {
 import { MetricCard } from '../../components/MetricCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { placePaperOrder, searchStocks, logResearchEvent } from '../../services/api';
+import { registerFcmToken, signInWithGoogle } from '../../services/firebase';
 import { colors } from '../../theme/colors';
 import type { ScreenSpec } from '../../types/screens';
+import { showToast } from '../../utils/toast';
 
 type Props = {
   screen: ScreenSpec;
@@ -42,11 +44,13 @@ export function BaseSpecScreen({ screen, onBack, onNavigate }: Props) {
         const data = await searchStocks(formState['Search query'] || 'RELIANCE');
         setResults(data);
         setStatus(`Found ${data.length} stocks`);
+        showToast(`Found ${data.length} stocks`);
         return;
       }
 
       if (nextScreenId && !(screen.id === 18 && action.toLowerCase() === 'confirm order')) {
         setStatus(`${action} completed`);
+        showToast(`${action} completed`);
         onNavigate(nextScreenId);
         return;
       }
@@ -65,6 +69,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate }: Props) {
           sessionId: 'mobile-demo-session',
         });
         setStatus(`Paper order ${order.status}: ${order._id}`);
+        showToast(`Order ${order.status}`);
         onNavigate(19);
         return;
       }
@@ -75,12 +80,49 @@ export function BaseSpecScreen({ screen, onBack, onNavigate }: Props) {
           action,
         });
         setStatus(`Research event logged: ${event._id}`);
+        showToast('Research event logged');
         return;
       }
 
       setStatus(`${action} completed in prototype mode`);
+      showToast(`${action} completed`);
     } catch {
       setStatus(`${action} is ready in UI; backend endpoint needs final data/setup`);
+      showToast(`${action} could not complete. Check setup/backend.`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setLoading(true);
+    setStatus('');
+    try {
+      const credential = await signInWithGoogle();
+      const displayName = credential.user.displayName ?? 'Google user';
+      setStatus(`Signed in as ${displayName}`);
+      showToast(`Welcome ${displayName}`);
+      onNavigate(9);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Google Sign-In failed.';
+      setStatus(message);
+      showToast(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleFcmSetup() {
+    setLoading(true);
+    setStatus('');
+    try {
+      const token = await registerFcmToken();
+      setStatus(`FCM ready: ${token.slice(0, 18)}...`);
+      showToast('Push notifications enabled');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'FCM setup failed.';
+      setStatus(message);
+      showToast(message);
     } finally {
       setLoading(false);
     }
@@ -128,6 +170,27 @@ export function BaseSpecScreen({ screen, onBack, onNavigate }: Props) {
                 />
               </View>
             ))}
+          </View>
+        ) : null}
+
+        {screen.id === 5 ? (
+          <View style={styles.panel}>
+            <Text style={styles.panelTitle}>Quick Sign In</Text>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+            >
+              <Text style={styles.googleIcon}>G</Text>
+              <Text style={styles.googleText}>Continue with Google</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.fcmButton}
+              onPress={handleFcmSetup}
+              disabled={loading}
+            >
+              <Text style={styles.fcmText}>Enable Push Notifications</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -503,5 +566,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginTop: 16,
+  },
+  googleButton: {
+    alignItems: 'center',
+    backgroundColor: colors.textStrong,
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+    paddingVertical: 13,
+  },
+  googleIcon: {
+    color: colors.bg,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  googleText: {
+    color: colors.bg,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  fcmButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+    borderRadius: 8,
+    marginTop: 10,
+    paddingVertical: 12,
+  },
+  fcmText: {
+    color: colors.textStrong,
+    fontSize: 14,
+    fontWeight: '900',
   },
 });
