@@ -1,12 +1,12 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-const localNetworkHost = 'http://192.168.1.11:4000';
+const productionHost = 'https://tradeiq-backend-v0du.onrender.com';
 
 const host = Platform.select({
-  android: localNetworkHost,
-  ios: localNetworkHost,
-  default: localNetworkHost,
+  android: productionHost,
+  ios: productionHost,
+  default: productionHost,
 });
 
 export const api = axios.create({
