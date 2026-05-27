@@ -12,7 +12,20 @@
           "package_name": "com.tradeiq.mobile"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "274440438205-371haqul0unouqca17i5tq3egurh8ul6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.tradeiq.mobile",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "274440438205-2c5k5qt08od2a4burr9ua71h75ln59rf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBT-tdpO8-y5P3MlSOQzNhESkRmwrOcFKs"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "274440438205-2c5k5qt08od2a4burr9ua71h75ln59rf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

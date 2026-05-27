@@ -4,7 +4,8 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Platform } from 'react-native';
 import { logResearchEvent } from './api';
 
-const webClientId = '';
+const webClientId =
+  '274440438205-2c5k5qt08od2a4burr9ua71h75ln59rf.apps.googleusercontent.com';
 
 let configured = false;
 
