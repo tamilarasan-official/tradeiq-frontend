@@ -6,6 +6,8 @@ This mobile app currently includes:
 
 - Login-first app flow
 - Firebase Google Sign-In wiring
+- Backend Google auth sync through `/api/auth/google`
+- Email/mobile backend login through `/api/auth/login`
 - FCM token request flow
 - Safe-area/status-bar app shell
 - Bottom tab navigation
@@ -13,6 +15,7 @@ This mobile app currently includes:
 - Backend-driven dashboard, watchlist, holdings, orders, and profile data
 - Toast feedback for actions
 - Buy/sell/order preview flow
+- Authenticated backend JWT attached to dashboard, profile, and order API calls
 
 The mobile app uses:
 
@@ -20,4 +23,4 @@ The mobile app uses:
 https://tradeiq-backend-v0du.onrender.com
 ```
 
-The backend currently returns demo trading data until a real broker/market-data provider is connected.
+The backend now reads app data from MongoDB. If MongoDB collections are empty, the app will show empty lists until users, stocks, holdings, and watchlist rows are created.

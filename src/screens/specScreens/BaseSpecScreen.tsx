@@ -13,6 +13,8 @@ import {
   ProfileData,
   getDashboardData,
   getProfileData,
+  loginWithGoogleProfile,
+  loginWithPassword,
   placePaperOrder,
   searchStocks,
 } from '../../services/api';
@@ -75,9 +77,18 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
         return;
       }
 
+      if (screen.id === 5 && action.toLowerCase() === 'login') {
+        const user = await loginWithPassword(
+          formState['Mobile or Email'] ?? '',
+          formState.Password ?? '',
+        );
+        showToast(`Welcome ${user.fullName}`);
+        onNavigate(9);
+        return;
+      }
+
       if (screen.id === 18 && action.toLowerCase() === 'confirm order') {
         const order = await placePaperOrder({
-          userId: '000000000000000000000000',
           symbol: formState.Symbol || 'RELIANCE',
           exchange: 'NSE',
           orderType: 'MARKET',
@@ -110,7 +121,12 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
     setLoading(true);
     try {
       const credential = await signInWithGoogle();
-      showToast(`Welcome ${credential.user.displayName ?? 'Investor'}`);
+      const user = await loginWithGoogleProfile({
+        firebaseUid: credential.user.uid,
+        email: credential.user.email ?? `${credential.user.uid}@firebase.tradeiq.app`,
+        fullName: credential.user.displayName ?? 'TradeIQ Investor',
+      });
+      showToast(`Welcome ${user.fullName}`);
       onNavigate(9);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Google sign-in failed');

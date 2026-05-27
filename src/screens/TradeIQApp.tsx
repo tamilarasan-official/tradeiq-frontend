@@ -3,6 +3,7 @@ import { StatusBar, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
+import { clearBackendSession } from '../services/api';
 import { colors } from '../theme/colors';
 import { screenRegistry } from './specScreens';
 
@@ -43,6 +44,7 @@ function MobileShell() {
   }
 
   function logout() {
+    clearBackendSession();
     setHistory([]);
     setCurrentScreenId(5);
   }
