@@ -189,12 +189,12 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
     <View style={styles.wrapper}>
       <View style={styles.topbar}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{screenTitle(screen.name)}</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.profileButton} onPress={() => onNavigate(13)}>
-            <Text style={styles.profileButtonText}>Profile</Text>
+          <TouchableOpacity style={styles.iconButton} onPress={() => onNavigate(28)}>
+            <Text style={styles.iconButtonText}>!</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.logoutButton}
@@ -241,6 +241,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
 
         {loading ? <ActivityIndicator color={colors.buy} style={styles.loader} /> : null}
       </ScrollView>
+      <BottomTabs activeScreenId={screen.id} onNavigate={onNavigate} />
     </View>
   );
 }
@@ -327,15 +328,49 @@ function renderScreenBody(
   if (screen.id === 13) {
     return (
       <>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{profile?.fullName ?? 'Loading profile...'}</Text>
-          <Text style={styles.mutedText}>{profile?.email ?? ''}</Text>
-          <Text style={styles.mutedText}>{profile?.mobile ?? ''}</Text>
+        <View style={styles.profileHeader}>
+          <View style={styles.avatarBox}>
+            <Text style={styles.avatarText}>
+              {(profile?.fullName ?? 'T').slice(0, 1).toUpperCase()}
+            </Text>
+            <View style={styles.proBadge}>
+              <Text style={styles.proText}>PRO</Text>
+            </View>
+          </View>
+          <View style={styles.profileIdentity}>
+            <Text style={styles.profileName}>{profile?.fullName ?? 'Loading profile...'}</Text>
+            <Text style={styles.profileEmail}>{profile?.email ?? ''}</Text>
+          </View>
         </View>
-        <View style={styles.grid}>
-          <InfoTile title="KYC" value={profile?.kycStatus ?? 'Loading...'} />
-          <InfoTile title="Study group" value={profile?.studyGroup ?? 'Loading...'} />
-          <InfoTile title="Security" value={profile?.securityStatus ?? 'Loading...'} tone="positive" />
+
+        <View style={styles.portfolioStrip}>
+          <View>
+            <Text style={styles.tileTitle}>Total Portfolio Value</Text>
+            <Text style={styles.profilePortfolioValue}>
+              {dashboard?.summary.current ?? 'Loading...'}
+            </Text>
+          </View>
+          <View style={styles.alignRight}>
+            <Text style={styles.positive}>+4.2%</Text>
+            <Text style={styles.mutedText}>Today</Text>
+          </View>
+        </View>
+
+        <SectionLabel title="Personal Details" />
+        <View style={styles.detailCard}>
+          <DetailRow label="Full Name" value={profile?.fullName ?? 'Loading...'} />
+          <DetailRow label="Email" value={profile?.email ?? 'Loading...'} />
+          <DetailRow label="Phone Number" value={profile?.mobile ?? 'Loading...'} />
+        </View>
+
+        <SectionLabel title="Security & Privacy" />
+        <View style={styles.detailCard}>
+          <DetailRow label="Biometric Login" value={profile?.securityStatus ?? 'Loading...'} tone="positive" />
+          <DetailRow label="KYC Status" value={profile?.kycStatus ?? 'Loading...'} />
+          <DetailRow label="Study Group" value={profile?.studyGroup ?? 'Loading...'} />
+          <TouchableOpacity style={styles.secondaryWideButton} onPress={handleFcmSetup}>
+            <Text style={styles.secondaryWideText}>Enable Push Notifications</Text>
+          </TouchableOpacity>
         </View>
       </>
     );
@@ -493,6 +528,68 @@ function InfoTile({ title, value, tone }: { title: string; value: string; tone?:
   );
 }
 
+function DetailRow({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: 'positive';
+}) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={[styles.detailValue, tone === 'positive' && styles.positive]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SectionLabel({ title }: { title: string }) {
+  return <Text style={styles.sectionLabel}>{title}</Text>;
+}
+
+function BottomTabs({
+  activeScreenId,
+  onNavigate,
+}: {
+  activeScreenId: number;
+  onNavigate: (screenId: number) => void;
+}) {
+  const tabs = [
+    { label: 'Home', icon: '⌂', screenId: 9 },
+    { label: 'Holdings', icon: '◴', screenId: 20 },
+    { label: 'Trade', icon: '⇄', screenId: 14 },
+    { label: 'Wallet', icon: '▣', screenId: 11 },
+    { label: 'Alerts', icon: '!', screenId: 27 },
+    { label: 'Profile', icon: '●', screenId: 13 },
+  ];
+
+  return (
+    <View style={styles.bottomTabs}>
+      {tabs.map(tab => {
+        const active = tab.screenId === activeScreenId;
+        return (
+          <TouchableOpacity
+            key={tab.label}
+            style={[styles.tabItem, active && styles.activeTabItem]}
+            onPress={() => onNavigate(tab.screenId)}
+          >
+            <Text style={[styles.tabIcon, active && styles.activeTabText]}>
+              {tab.icon}
+            </Text>
+            <Text style={[styles.tabLabel, active && styles.activeTabText]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 function nextScreenForAction(screenId: number, action: string) {
   const key = `${screenId}:${action.toLowerCase()}`;
   const map: Record<string, number> = {
@@ -556,12 +653,12 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   backButton: {
-    backgroundColor: colors.surface2,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    alignItems: 'center',
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
   },
-  backText: { color: colors.textStrong, fontWeight: '900' },
+  backIcon: { color: colors.textStrong, fontSize: 34, fontWeight: '400' },
   headerTitle: {
     color: colors.textStrong,
     flex: 1,
@@ -573,15 +670,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  profileButton: {
+  iconButton: {
+    alignItems: 'center',
     backgroundColor: colors.surface2,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
-  profileButtonText: {
+  iconButtonText: {
     color: colors.textStrong,
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: '900',
   },
   logoutButton: {
@@ -595,7 +694,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
   },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { padding: 16, paddingBottom: 128 },
   loginContent: {
     flexGrow: 1,
     justifyContent: 'center',
@@ -761,4 +860,135 @@ const styles = StyleSheet.create({
   },
   secondaryWideText: { color: colors.textStrong, fontWeight: '900' },
   loader: { marginTop: 18 },
+  bottomTabs: {
+    backgroundColor: '#12213A',
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    left: 0,
+    paddingBottom: 8,
+    paddingTop: 8,
+    position: 'absolute',
+    right: 0,
+  },
+  tabItem: {
+    alignItems: 'center',
+    borderRadius: 12,
+    minWidth: 52,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+  },
+  activeTabItem: {
+    backgroundColor: 'rgba(79,142,247,0.12)',
+  },
+  tabIcon: {
+    color: colors.muted,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  tabLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  activeTabText: {
+    color: colors.accent,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 18,
+    marginBottom: 24,
+  },
+  avatarBox: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 20,
+    borderWidth: 1,
+    height: 88,
+    justifyContent: 'center',
+    width: 88,
+  },
+  avatarText: {
+    color: colors.buy,
+    fontSize: 34,
+    fontWeight: '900',
+  },
+  proBadge: {
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    bottom: -10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    position: 'absolute',
+  },
+  proText: {
+    color: colors.textStrong,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  profileIdentity: {
+    flex: 1,
+  },
+  profileName: {
+    color: colors.textStrong,
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  profileEmail: {
+    color: colors.muted,
+    fontSize: 15,
+    marginTop: 4,
+  },
+  portfolioStrip: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  profilePortfolioValue: {
+    color: colors.textStrong,
+    fontSize: 27,
+    fontWeight: '900',
+    marginTop: 8,
+  },
+  sectionLabel: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  detailCard: {
+    backgroundColor: '#202128',
+    borderColor: '#373942',
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  detailRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  detailLabel: {
+    color: colors.muted,
+    flex: 1,
+    fontSize: 16,
+  },
+  detailValue: {
+    color: colors.textStrong,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
 });
