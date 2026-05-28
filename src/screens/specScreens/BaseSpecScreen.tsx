@@ -14,8 +14,10 @@ import {
 } from 'react-native';
 import {
   DashboardData,
+  IntelligenceData,
   ProfileData,
   getDashboardData,
+  getIntelligenceOverview,
   getMarketIndices,
   getProfileData,
   loginWithGoogleProfile,
@@ -103,22 +105,25 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [indices, setIndices] = useState<Array<{ symbol: string; ltp: number; changePercent: number }>>([]);
+  const [intelligence, setIntelligence] = useState<IntelligenceData | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadData() {
       try {
-        const [dashboardData, profileData, indexData] = await Promise.all([
+        const [dashboardData, profileData, indexData, intelligenceData] = await Promise.all([
           getDashboardData(),
           getProfileData(),
           getMarketIndices(),
+          getIntelligenceOverview(),
         ]);
 
         if (mounted) {
           setDashboard(dashboardData);
           setProfile(profileData);
           setIndices(indexData);
+          setIntelligence(intelligenceData);
         }
       } catch {
         if (mounted) {
@@ -383,6 +388,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           dashboard,
           profile,
           indices,
+          intelligence,
           onLogout,
         )}
 
@@ -437,6 +443,7 @@ function renderScreenBody(
   dashboard: DashboardData | null,
   profile: ProfileData | null,
   indices: Array<{ symbol: string; ltp: number; changePercent: number }>,
+  intelligence: IntelligenceData | null,
   onLogout?: () => void,
 ) {
   if (screen.id === 6) {
@@ -475,6 +482,7 @@ function renderScreenBody(
         </View>
         <PortfolioGraph dashboard={dashboard} />
         <RiskSummary />
+        <IntelligenceHub intelligence={intelligence} onNavigate={onNavigate} />
         <IndicesStrip indices={indices} />
         <MarketList onNavigate={onNavigate} watchlist={dashboard?.watchlist ?? []} />
         <OrderList orders={dashboard?.orders ?? []} />
@@ -492,6 +500,30 @@ function renderScreenBody(
 
   if (screen.id === 12) {
     return <OrderList orders={dashboard?.orders ?? []} />;
+  }
+
+  if (screen.id === 21) {
+    return <PortfolioHealthScreen intelligence={intelligence} />;
+  }
+
+  if (screen.id === 22) {
+    return <AiRecommendationScreen intelligence={intelligence} />;
+  }
+
+  if (screen.id === 23) {
+    return <SmartRiskScreen intelligence={intelligence} />;
+  }
+
+  if (screen.id === 24) {
+    return <EmotionalTradingScreen intelligence={intelligence} />;
+  }
+
+  if (screen.id === 25) {
+    return <PredictiveAlertsScreen intelligence={intelligence} />;
+  }
+
+  if (screen.id === 26) {
+    return <PaperTradingScreen intelligence={intelligence} />;
   }
 
   if (screen.id === 13) {
@@ -583,11 +615,15 @@ function renderScreenBody(
 
   if (screen.id === 28) {
     return (
-      <View style={styles.card}>
-        <TouchableOpacity style={styles.secondaryWideButton} onPress={handleFcmSetup}>
-          <Text style={styles.secondaryWideText}>Enable Push Notifications</Text>
-        </TouchableOpacity>
-      </View>
+      <>
+        <AiChatAssistant intelligence={intelligence} />
+        <VoiceAssistant intelligence={intelligence} />
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.secondaryWideButton} onPress={handleFcmSetup}>
+            <Text style={styles.secondaryWideText}>Enable Push Notifications</Text>
+          </TouchableOpacity>
+        </View>
+      </>
     );
   }
 
@@ -756,6 +792,169 @@ function RiskSummary() {
           <View style={styles.meterHigh} />
         </View>
         <Text style={styles.tileValue}>Moderate</Text>
+      </View>
+    </View>
+  );
+}
+
+function IntelligenceHub({
+  intelligence,
+  onNavigate,
+}: {
+  intelligence: IntelligenceData | null;
+  onNavigate: (screenId: number) => void;
+}) {
+  const items = [
+    { title: 'Health', value: `${intelligence?.portfolioHealth.score ?? 0}/100`, screenId: 21 },
+    { title: 'AI Advice', value: intelligence?.aiRecommendation.title ?? 'Loading', screenId: 22 },
+    { title: 'Risk', value: intelligence?.risk.level ?? 'Loading', screenId: 23 },
+    { title: 'Behaviour', value: intelligence?.emotionalTrading.status ?? 'Loading', screenId: 24 },
+    { title: 'Predict', value: `${intelligence?.predictiveAlerts.length ?? 0} alerts`, screenId: 25 },
+    { title: 'Paper', value: intelligence?.paperTrading.enabled ? 'Enabled' : 'Ready', screenId: 26 },
+    { title: 'AI Chat', value: 'Assistant', screenId: 28 },
+    { title: 'Voice', value: 'Commands', screenId: 28 },
+  ];
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeaderRow}>
+        <Text style={styles.cardTitle}>TradeIQ intelligence</Text>
+        <Text style={styles.statusPill}>8 features</Text>
+      </View>
+      <View style={styles.featureGrid}>
+        {items.map(item => (
+          <TouchableOpacity
+            key={item.title}
+            style={styles.featureTile}
+            onPress={() => onNavigate(item.screenId)}
+          >
+            <Text style={styles.featureTitle}>{item.title}</Text>
+            <Text style={styles.featureValue}>{item.value}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function PortfolioHealthScreen({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <FeaturePanel
+      title="Portfolio Health Score"
+      metric={`${intelligence?.portfolioHealth.score ?? 0}/100`}
+      subtitle={intelligence?.portfolioHealth.label ?? 'Analysing'}
+      items={intelligence?.portfolioHealth.drivers ?? []}
+    />
+  );
+}
+
+function AiRecommendationScreen({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <FeaturePanel
+      title="AI Portfolio Recommendation"
+      metric={intelligence?.aiRecommendation.title ?? 'Analysing'}
+      subtitle="Allocation and diversification suggestions"
+      items={intelligence?.aiRecommendation.suggestions ?? []}
+    />
+  );
+}
+
+function SmartRiskScreen({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <FeaturePanel
+      title="Smart Risk Score"
+      metric={`${intelligence?.risk.level ?? 'Loading'} risk`}
+      subtitle={`Score ${intelligence?.risk.score ?? 0}/100`}
+      items={intelligence?.risk.factors ?? []}
+    />
+  );
+}
+
+function EmotionalTradingScreen({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <FeaturePanel
+      title="Emotional Trading Detection"
+      metric={intelligence?.emotionalTrading.status ?? 'Analysing'}
+      subtitle={intelligence?.emotionalTrading.coaching ?? 'Behaviour coaching'}
+      items={intelligence?.emotionalTrading.signals ?? []}
+    />
+  );
+}
+
+function PredictiveAlertsScreen({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Predictive Market Alerts</Text>
+      {(intelligence?.predictiveAlerts ?? []).map(alert => (
+        <View key={alert.title} style={styles.insightRow}>
+          <View>
+            <Text style={styles.symbol}>{alert.title}</Text>
+            <Text style={styles.mutedText}>{alert.message}</Text>
+          </View>
+          <Text style={styles.statusPill}>{alert.severity}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function PaperTradingScreen({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <FeaturePanel
+      title="Paper Trading Mode"
+      metric={`INR ${(intelligence?.paperTrading.balance ?? 0).toLocaleString('en-IN')}`}
+      subtitle={intelligence?.paperTrading.message ?? 'Practice without risk'}
+      items={['Virtual balance', 'Order preview', 'No real capital risk']}
+    />
+  );
+}
+
+function AiChatAssistant({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <FeaturePanel
+      title="AI Chat Assistant"
+      metric="Ask TradeIQ"
+      subtitle="Market education and portfolio guidance"
+      items={intelligence?.aiAssistant.prompts ?? []}
+    />
+  );
+}
+
+function VoiceAssistant({ intelligence }: { intelligence: IntelligenceData | null }) {
+  return (
+    <FeaturePanel
+      title="Voice Trading Assistant"
+      metric="Voice commands"
+      subtitle={intelligence?.voiceAssistant.safety ?? 'Requires confirmation'}
+      items={intelligence?.voiceAssistant.examples ?? []}
+    />
+  );
+}
+
+function FeaturePanel({
+  title,
+  metric,
+  subtitle,
+  items,
+}: {
+  title: string;
+  metric: string;
+  subtitle: string;
+  items: string[];
+}) {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>{title}</Text>
+      <Text style={styles.featureHeroMetric}>{metric}</Text>
+      <Text style={styles.mutedText}>{subtitle}</Text>
+      <View style={styles.insightList}>
+        {items.length === 0 ? <EmptyState title="Insights will appear after more activity" /> : null}
+        {items.map(item => (
+          <View key={item} style={styles.bulletRow}>
+            <View style={styles.bulletDot} />
+            <Text style={styles.insightText}>{item}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -1296,6 +1495,68 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 13,
     fontWeight: '800',
+  },
+  featureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  featureTile: {
+    backgroundColor: '#0B101B',
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexGrow: 1,
+    minHeight: 76,
+    minWidth: '46%',
+    padding: 12,
+  },
+  featureTitle: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  featureValue: {
+    color: colors.textStrong,
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 8,
+  },
+  featureHeroMetric: {
+    color: colors.buy,
+    fontSize: 30,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  insightList: {
+    marginTop: 16,
+  },
+  insightRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  bulletRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  bulletDot: {
+    backgroundColor: colors.buy,
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  insightText: {
+    color: colors.textStrong,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
   },
   secondaryWideButton: {
     alignItems: 'center',

@@ -156,8 +156,52 @@ export type ProfileData = {
   securityStatus: string;
 };
 
+export type IntelligenceData = {
+  portfolioHealth: {
+    score: number;
+    label: string;
+    drivers: string[];
+  };
+  aiRecommendation: {
+    title: string;
+    suggestions: string[];
+  };
+  risk: {
+    score: number;
+    level: string;
+    factors: string[];
+  };
+  predictiveAlerts: Array<{
+    title: string;
+    message: string;
+    severity: string;
+  }>;
+  emotionalTrading: {
+    status: string;
+    signals: string[];
+    coaching: string;
+  };
+  paperTrading: {
+    balance: number;
+    enabled: boolean;
+    message: string;
+  };
+  aiAssistant: {
+    prompts: string[];
+  };
+  voiceAssistant: {
+    examples: string[];
+    safety: string;
+  };
+};
+
 export async function getDashboardData() {
   const response = await api.get<{ data: DashboardData }>('/api/dashboard');
+  return response.data.data;
+}
+
+export async function getIntelligenceOverview() {
+  const response = await api.get<{ data: IntelligenceData }>('/api/intelligence/overview');
   return response.data.data;
 }
 
