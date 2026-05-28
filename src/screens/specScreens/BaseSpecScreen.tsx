@@ -355,22 +355,17 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
   return (
     <View style={styles.wrapper}>
       <View style={styles.topbar}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backIcon}>{'<'}</Text>
-        </TouchableOpacity>
+        {screen.id === 9 ? (
+          <View style={styles.backSpacer} />
+        ) : (
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
+            <Text style={styles.backIcon}>{'<'}</Text>
+          </TouchableOpacity>
+        )}
         <Text style={styles.headerTitle}>{screenTitle(screen.name)}</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconButton} onPress={() => onNavigate(28)}>
-            <Text style={styles.iconButtonText}>!</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={() => {
-              showToast('Logged out');
-              onLogout?.();
-            }}
-          >
-            <Text style={styles.logoutText}>Logout</Text>
+            <Text style={styles.iconButtonText}>Bell</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -388,6 +383,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           dashboard,
           profile,
           indices,
+          onLogout,
         )}
 
         <View style={styles.actionGrid}>
@@ -441,6 +437,7 @@ function renderScreenBody(
   dashboard: DashboardData | null,
   profile: ProfileData | null,
   indices: Array<{ symbol: string; ltp: number; changePercent: number }>,
+  onLogout?: () => void,
 ) {
   if (screen.id === 6) {
     return (
@@ -476,6 +473,8 @@ function renderScreenBody(
           <InfoTile title="Invested" value={dashboard?.summary.invested ?? 'Loading...'} />
           <InfoTile title="Current" value={dashboard?.summary.current ?? 'Loading...'} tone="positive" />
         </View>
+        <PortfolioGraph dashboard={dashboard} />
+        <RiskSummary />
         <IndicesStrip indices={indices} />
         <MarketList onNavigate={onNavigate} watchlist={dashboard?.watchlist ?? []} />
         <OrderList orders={dashboard?.orders ?? []} />
@@ -542,6 +541,15 @@ function renderScreenBody(
             <Text style={styles.secondaryWideText}>Enable Push Notifications</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={styles.profileLogoutButton}
+          onPress={() => {
+            showToast('Logged out');
+            onLogout?.();
+          }}
+        >
+          <Text style={styles.profileLogoutText}>Logout</Text>
+        </TouchableOpacity>
       </>
     );
   }
@@ -692,6 +700,71 @@ function OrderList({ orders }: { orders: DashboardData['orders'] }) {
   );
 }
 
+function PortfolioGraph({ dashboard }: { dashboard: DashboardData | null }) {
+  const invested = parseInr(dashboard?.summary.invested);
+  const current = parseInr(dashboard?.summary.current);
+  const maxValue = Math.max(invested, current, 1);
+  const investedWidth = `${Math.max(8, (invested / maxValue) * 100)}%` as const;
+  const currentWidth = `${Math.max(8, (current / maxValue) * 100)}%` as const;
+  const gain = current - invested;
+
+  return (
+    <View style={styles.analyticsCard}>
+      <View style={styles.cardHeaderRow}>
+        <Text style={styles.cardTitle}>Portfolio trend</Text>
+        <Text style={gain >= 0 ? styles.positive : styles.negative}>
+          {gain >= 0 ? '+' : '-'}INR {Math.abs(gain).toLocaleString('en-IN')}
+        </Text>
+      </View>
+
+      <View style={styles.graphTrack}>
+        <View style={[styles.graphFill, styles.investedFill, { width: investedWidth }]} />
+      </View>
+      <View style={styles.graphLabelRow}>
+        <Text style={styles.mutedText}>Invested</Text>
+        <Text style={styles.price}>{dashboard?.summary.invested ?? 'INR 0'}</Text>
+      </View>
+
+      <View style={styles.graphTrack}>
+        <View style={[styles.graphFill, styles.currentFill, { width: currentWidth }]} />
+      </View>
+      <View style={styles.graphLabelRow}>
+        <Text style={styles.mutedText}>Current</Text>
+        <Text style={styles.price}>{dashboard?.summary.current ?? 'INR 0'}</Text>
+      </View>
+    </View>
+  );
+}
+
+function RiskSummary() {
+  return (
+    <View style={styles.riskGrid}>
+      <View style={styles.riskCard}>
+        <Text style={styles.tileTitle}>Allocation</Text>
+        <View style={styles.donutOuter}>
+          <View style={styles.donutInner}>
+            <Text style={styles.donutText}>EQ</Text>
+          </View>
+        </View>
+        <Text style={styles.mutedText}>Equity focused</Text>
+      </View>
+      <View style={styles.riskCard}>
+        <Text style={styles.tileTitle}>Risk meter</Text>
+        <View style={styles.meterTrack}>
+          <View style={styles.meterLow} />
+          <View style={styles.meterMid} />
+          <View style={styles.meterHigh} />
+        </View>
+        <Text style={styles.tileValue}>Moderate</Text>
+      </View>
+    </View>
+  );
+}
+
+function parseInr(value?: string) {
+  return Number(String(value ?? '').replace(/[^0-9.-]/g, '')) || 0;
+}
+
 function IndicesStrip({ indices }: { indices: Array<{ symbol: string; ltp: number; changePercent: number }> }) {
   if (indices.length === 0) {
     return null;
@@ -760,12 +833,12 @@ function BottomTabs({
   onNavigate: (screenId: number) => void;
 }) {
   const tabs = [
-    { label: 'Home', icon: 'H', screenId: 9 },
-    { label: 'Holdings', icon: 'P', screenId: 20 },
-    { label: 'Trade', icon: '+', screenId: 14 },
-    { label: 'Wallet', icon: 'W', screenId: 11 },
-    { label: 'Alerts', icon: '!', screenId: 27 },
-    { label: 'Profile', icon: 'U', screenId: 13 },
+    { label: 'Home', icon: 'Home', screenId: 9 },
+    { label: 'Holdings', icon: 'Chart', screenId: 20 },
+    { label: 'Trade', icon: 'Trade', screenId: 14 },
+    { label: 'Wallet', icon: 'Wallet', screenId: 11 },
+    { label: 'Alerts', icon: 'Bell', screenId: 27 },
+    { label: 'Profile', icon: 'User', screenId: 13 },
   ];
 
   return (
@@ -859,6 +932,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 40,
   },
+  backSpacer: {
+    width: 40,
+  },
   backIcon: { color: colors.textStrong, fontSize: 34, fontWeight: '400' },
   headerTitle: {
     color: colors.textStrong,
@@ -877,11 +953,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     height: 36,
     justifyContent: 'center',
-    width: 36,
+    width: 48,
   },
   iconButtonText: {
     color: colors.textStrong,
-    fontSize: 18,
+    fontSize: 12,
     fontWeight: '900',
   },
   logoutButton: {
@@ -1092,6 +1168,99 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
   },
+  analyticsCard: {
+    backgroundColor: '#111925',
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 16,
+  },
+  cardHeaderRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  graphTrack: {
+    backgroundColor: '#080D16',
+    borderRadius: 999,
+    height: 12,
+    marginTop: 10,
+    overflow: 'hidden',
+  },
+  graphFill: {
+    borderRadius: 999,
+    height: 12,
+  },
+  investedFill: {
+    backgroundColor: '#4F8EF7',
+  },
+  currentFill: {
+    backgroundColor: colors.buy,
+  },
+  graphLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  riskGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  riskCard: {
+    backgroundColor: '#111925',
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    padding: 14,
+  },
+  donutOuter: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: colors.buy,
+    borderRadius: 42,
+    height: 84,
+    justifyContent: 'center',
+    marginVertical: 12,
+    width: 84,
+  },
+  donutInner: {
+    alignItems: 'center',
+    backgroundColor: '#111925',
+    borderRadius: 28,
+    height: 56,
+    justifyContent: 'center',
+    width: 56,
+  },
+  donutText: {
+    color: colors.textStrong,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  meterTrack: {
+    borderRadius: 999,
+    flexDirection: 'row',
+    height: 12,
+    marginBottom: 18,
+    marginTop: 28,
+    overflow: 'hidden',
+  },
+  meterLow: {
+    backgroundColor: colors.buy,
+    flex: 1,
+  },
+  meterMid: {
+    backgroundColor: '#F5B74F',
+    flex: 1,
+  },
+  meterHigh: {
+    backgroundColor: colors.sell,
+    flex: 1,
+  },
   indicesScroller: {
     marginBottom: 16,
   },
@@ -1144,16 +1313,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     left: 0,
-    paddingBottom: 10,
-    paddingTop: 9,
+    paddingBottom: 8,
+    paddingTop: 8,
     position: 'absolute',
     right: 0,
   },
   tabItem: {
     alignItems: 'center',
     borderRadius: 12,
-    minWidth: 52,
-    paddingHorizontal: 6,
+    minWidth: 56,
+    paddingHorizontal: 4,
     paddingVertical: 6,
   },
   activeTabItem: {
@@ -1161,7 +1330,7 @@ const styles = StyleSheet.create({
   },
   tabIcon: {
     color: colors.muted,
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: '900',
   },
   tabLabel: {
@@ -1172,6 +1341,20 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: colors.accent,
+  },
+  profileLogoutButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,77,77,0.14)',
+    borderColor: 'rgba(255,77,77,0.28)',
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 18,
+    paddingVertical: 15,
+  },
+  profileLogoutText: {
+    color: colors.sell,
+    fontSize: 16,
+    fontWeight: '900',
   },
   profileHeader: {
     alignItems: 'center',
