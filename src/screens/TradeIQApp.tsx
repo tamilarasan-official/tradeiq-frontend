@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { clearBackendSession, restoreBackendSession } from '../services/api';
+import { isBiometricLoginEnabled, promptBiometricLogin } from '../services/biometricAuth';
 import { colors } from '../theme/colors';
 import { ThemeProvider, useTheme } from '../theme/ThemeContext';
 import { screenRegistry } from './specScreens';
@@ -51,9 +52,23 @@ function MobileShell() {
     let mounted = true;
 
     restoreBackendSession()
-      .then(restored => {
+      .then(async restored => {
         if (mounted && restored) {
+          if (await isBiometricLoginEnabled()) {
+            const verified = await promptBiometricLogin();
+            if (!verified) {
+              await clearBackendSession();
+              setCurrentScreenId(5);
+              return;
+            }
+          }
           setCurrentScreenId(9);
+        }
+      })
+      .catch(async () => {
+        await clearBackendSession();
+        if (mounted) {
+          setCurrentScreenId(5);
         }
       })
       .finally(() => {

@@ -6,7 +6,10 @@ import {
   CheckCircle2,
   ChevronLeft,
   CreditCard,
+  FileText,
+  HelpCircle,
   Home as HomeIcon,
+  ShieldCheck,
   Repeat2,
   User,
   Wallet,
@@ -24,6 +27,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   DashboardData,
   IntelligenceData,
@@ -39,6 +43,11 @@ import {
   registerWithPassword,
   searchStocks,
 } from '../../services/api';
+import {
+  isBiometricLoginEnabled,
+  promptBiometricLogin,
+  setBiometricLoginEnabled,
+} from '../../services/biometricAuth';
 import { registerFcmToken, signInWithGoogle } from '../../services/firebase';
 import { colors } from '../../theme/colors';
 import { useTheme } from '../../theme/ThemeContext';
@@ -124,8 +133,19 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
   const [intelligence, setIntelligence] = useState<IntelligenceData | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [typedTitle, setTypedTitle] = useState('');
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [kycStatus, setKycStatus] = useState<'PENDING' | 'VERIFYING' | 'VERIFIED'>('PENDING');
   Object.assign(colors, theme.colors);
   styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
+
+  useEffect(() => {
+    isBiometricLoginEnabled().then(setBiometricEnabled);
+    AsyncStorage.getItem('tradeiq.kyc.status').then(savedStatus => {
+      if (savedStatus === 'VERIFIED') {
+        setKycStatus('VERIFIED');
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (screen.id !== 9) {
@@ -208,6 +228,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           formState.Password ?? '',
         );
         showToast(`Welcome ${user.fullName}`);
+        registerFcmToken().catch(() => undefined);
         onNavigate(9);
         return;
       }
@@ -271,6 +292,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
         fullName: credential.user.displayName ?? 'TradeIQ Investor',
       });
       showToast(`Welcome ${user.fullName}`);
+      registerFcmToken().catch(() => undefined);
       onNavigate(9);
     } catch (error) {
       if (
@@ -444,11 +466,42 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
               onLogout,
               mode,
               setMode,
+              biometricEnabled,
+              async nextEnabled => {
+                if (nextEnabled) {
+                  try {
+                    const verified = await promptBiometricLogin('Enable biometric login for TradeIQ');
+                    if (!verified) {
+                      showToast('Biometric verification cancelled');
+                      return;
+                    }
+                  } catch (error) {
+                    showToast(error instanceof Error ? error.message : 'Biometric setup failed');
+                    return;
+                  }
+                }
+                await setBiometricLoginEnabled(nextEnabled);
+                setBiometricEnabled(nextEnabled);
+                showToast(nextEnabled ? 'Biometric login enabled' : 'Biometric login disabled');
+              },
+              kycStatus,
+              () => {
+                if (kycStatus !== 'PENDING') {
+                  return;
+                }
+                setKycStatus('VERIFYING');
+                showToast('KYC verification started');
+                setTimeout(() => {
+                  setKycStatus('VERIFIED');
+                  AsyncStorage.setItem('tradeiq.kyc.status', 'VERIFIED');
+                  showToast('KYC verified');
+                }, 1400);
+              },
             )}
           </>
         )}
 
-        {screen.id !== 11 ? (
+        {![9, 11, 13].includes(screen.id) ? (
           <View style={styles.actionGrid}>
             {screen.actions.map(action => (
               <TouchableOpacity
@@ -547,6 +600,10 @@ function renderScreenBody(
   onLogout?: () => void,
   themeMode?: ThemeMode,
   setThemeMode?: (mode: ThemeMode) => void,
+  biometricEnabled?: boolean,
+  onBiometricToggle?: (enabled: boolean) => void,
+  kycStatus?: 'PENDING' | 'VERIFYING' | 'VERIFIED',
+  onKycVerify?: () => void,
 ) {
   if (screen.id === 6) {
     return (
@@ -582,6 +639,7 @@ function renderScreenBody(
           <InfoTile title="Invested" value={dashboard?.summary.invested ?? 'Loading...'} />
           <InfoTile title="Current" value={dashboard?.summary.current ?? 'Loading...'} tone="positive" />
         </View>
+        <DashboardQuickTrade onNavigate={onNavigate} />
         <PortfolioGraph dashboard={dashboard} />
         <RiskSummary />
         <IntelligenceHub intelligence={intelligence} onNavigate={onNavigate} />
@@ -679,12 +737,40 @@ function renderScreenBody(
 
         <SectionLabel title="Security & Privacy" />
         <View style={styles.detailCard}>
-          <DetailRow label="Biometric Login" value={profile?.securityStatus ?? 'Loading...'} tone="positive" />
-          <DetailRow label="KYC Status" value={profile?.kycStatus ?? 'Loading...'} />
+          <View style={styles.settingRow}>
+            <View>
+              <Text style={styles.detailLabel}>Biometric Login</Text>
+              <Text style={styles.mutedText}>Require device biometric when reopening TradeIQ</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggleTrack, biometricEnabled && styles.toggleTrackActive]}
+              onPress={() => onBiometricToggle?.(!biometricEnabled)}
+            >
+              <View style={[styles.toggleThumb, biometricEnabled && styles.toggleThumbActive]} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.settingRow}>
+            <View>
+              <Text style={styles.detailLabel}>KYC Status</Text>
+              <Text style={kycStatus === 'VERIFIED' ? styles.positive : styles.mutedText}>
+                {kycStatus === 'VERIFIED' ? 'Verified' : kycStatus === 'VERIFYING' ? 'Verifying...' : 'Pending'}
+              </Text>
+            </View>
+            {kycStatus !== 'VERIFIED' ? (
+              <TouchableOpacity
+                style={styles.verifyButton}
+                onPress={onKycVerify}
+                disabled={kycStatus === 'VERIFYING'}
+              >
+                <Text style={styles.verifyButtonText}>
+                  {kycStatus === 'VERIFYING' ? 'Checking' : 'Verify'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <ShieldCheck color={colors.buy} size={26} strokeWidth={2.5} />
+            )}
+          </View>
           <DetailRow label="Study Group" value={profile?.studyGroup ?? 'Loading...'} />
-          <TouchableOpacity style={styles.secondaryWideButton} onPress={handleFcmSetup}>
-            <Text style={styles.secondaryWideText}>Enable Push Notifications</Text>
-          </TouchableOpacity>
         </View>
 
         <SectionLabel title="Appearance" />
@@ -703,6 +789,11 @@ function renderScreenBody(
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+        <View style={styles.detailCard}>
+          <SupportLink Icon={HelpCircle} title="Help and Support" />
+          <SupportLink Icon={ShieldCheck} title="Privacy Policy" />
+          <SupportLink Icon={FileText} title="Terms and Conditions" />
         </View>
         <TouchableOpacity
           style={styles.profileLogoutButton}
@@ -1280,6 +1371,42 @@ function InfoTile({ title, value, tone }: { title: string; value: string; tone?:
   );
 }
 
+function DashboardQuickTrade({ onNavigate }: { onNavigate: (screenId: number) => void }) {
+  return (
+    <View style={styles.quickTradeCard}>
+      <TouchableOpacity style={styles.searchBarButton} onPress={() => onNavigate(14)}>
+        <Text style={styles.searchBarText}>Search stocks, indices or ETFs</Text>
+      </TouchableOpacity>
+      <View style={styles.quickTradeActions}>
+        <TouchableOpacity style={styles.buyActionButton} onPress={() => onNavigate(16)}>
+          <Text style={styles.quickTradeText}>Buy</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.sellActionButton} onPress={() => onNavigate(17)}>
+          <Text style={styles.quickTradeText}>Sell</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function SupportLink({
+  Icon,
+  title,
+}: {
+  Icon: React.ComponentType<{ color: string; size: number; strokeWidth?: number }>;
+  title: string;
+}) {
+  return (
+    <TouchableOpacity style={styles.supportRow} onPress={() => showToast(`${title} will open soon`)}>
+      <View style={styles.supportIcon}>
+        <Icon color={colors.primary} size={20} strokeWidth={2.4} />
+      </View>
+      <Text style={styles.supportTitle}>{title}</Text>
+      <ChevronLeft color={colors.muted} size={20} style={styles.supportChevron} />
+    </TouchableOpacity>
+  );
+}
+
 function DetailRow({
   label,
   value,
@@ -1482,7 +1609,7 @@ return StyleSheet.create({
     width: 210,
   },
   authPanel: {
-    backgroundColor: '#111925',
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 14,
     borderWidth: 1,
@@ -1554,7 +1681,7 @@ return StyleSheet.create({
     marginBottom: 16,
   },
   skeletonBlock: {
-    backgroundColor: '#202838',
+    backgroundColor: colors.skeleton,
     borderRadius: 8,
     opacity: 0.72,
   },
@@ -1632,6 +1759,51 @@ return StyleSheet.create({
     fontWeight: '900',
     marginTop: 6,
   },
+  quickTradeCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 14,
+  },
+  searchBarButton: {
+    backgroundColor: colors.input,
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  searchBarText: {
+    color: colors.muted,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  quickTradeActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  buyActionButton: {
+    alignItems: 'center',
+    backgroundColor: colors.buy,
+    borderRadius: 10,
+    flex: 1,
+    paddingVertical: 15,
+  },
+  sellActionButton: {
+    alignItems: 'center',
+    backgroundColor: colors.sell,
+    borderRadius: 10,
+    flex: 1,
+    paddingVertical: 15,
+  },
+  quickTradeText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
   inputGroup: { marginBottom: 14 },
   label: {
     color: colors.muted,
@@ -1640,7 +1812,7 @@ return StyleSheet.create({
     marginBottom: 7,
   },
   input: {
-    backgroundColor: '#070B12',
+    backgroundColor: colors.input,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
@@ -1650,7 +1822,7 @@ return StyleSheet.create({
     paddingVertical: 13,
   },
   amountInput: {
-    backgroundColor: '#070B12',
+    backgroundColor: colors.input,
     borderColor: colors.border,
     borderRadius: 10,
     borderWidth: 1,
@@ -1661,7 +1833,7 @@ return StyleSheet.create({
     paddingVertical: 14,
   },
   walletBalanceCard: {
-    backgroundColor: '#101B2D',
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 12,
     borderWidth: 1,
@@ -1777,10 +1949,12 @@ return StyleSheet.create({
     marginTop: 6,
     paddingVertical: 15,
   },
-  primaryButtonText: { color: colors.bg, fontSize: 16, fontWeight: '900' },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
   googleButton: {
     alignItems: 'center',
-    backgroundColor: colors.textStrong,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
     borderRadius: 10,
     flexDirection: 'row',
     gap: 12,
@@ -1788,8 +1962,8 @@ return StyleSheet.create({
     marginTop: 12,
     paddingVertical: 15,
   },
-  googleIcon: { color: colors.bg, fontSize: 18, fontWeight: '900' },
-  googleText: { color: colors.bg, fontSize: 16, fontWeight: '900' },
+  googleIcon: { color: colors.textStrong, fontSize: 18, fontWeight: '900' },
+  googleText: { color: colors.textStrong, fontSize: 16, fontWeight: '900' },
   linkText: {
     color: colors.accent,
     fontSize: 14,
@@ -1838,7 +2012,7 @@ return StyleSheet.create({
     fontWeight: '900',
   },
   analyticsCard: {
-    backgroundColor: '#111925',
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 12,
     borderWidth: 1,
@@ -1852,7 +2026,7 @@ return StyleSheet.create({
     marginBottom: 12,
   },
   graphTrack: {
-    backgroundColor: '#080D16',
+    backgroundColor: colors.bgSecondary,
     borderRadius: 999,
     height: 12,
     marginTop: 10,
@@ -1863,7 +2037,7 @@ return StyleSheet.create({
     height: 12,
   },
   investedFill: {
-    backgroundColor: '#4F8EF7',
+    backgroundColor: colors.primary,
   },
   currentFill: {
     backgroundColor: colors.buy,
@@ -1880,7 +2054,7 @@ return StyleSheet.create({
     marginBottom: 16,
   },
   riskCard: {
-    backgroundColor: '#111925',
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 12,
     borderWidth: 1,
@@ -1899,7 +2073,7 @@ return StyleSheet.create({
   },
   donutInner: {
     alignItems: 'center',
-    backgroundColor: '#111925',
+    backgroundColor: colors.surface,
     borderRadius: 28,
     height: 56,
     justifyContent: 'center',
@@ -1923,7 +2097,7 @@ return StyleSheet.create({
     flex: 1,
   },
   meterMid: {
-    backgroundColor: '#F5B74F',
+    backgroundColor: colors.warning,
     flex: 1,
   },
   meterHigh: {
@@ -1934,7 +2108,7 @@ return StyleSheet.create({
     marginBottom: 16,
   },
   indexCard: {
-    backgroundColor: '#101B2D',
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 10,
     borderWidth: 1,
@@ -1955,7 +2129,7 @@ return StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    backgroundColor: '#0B101B',
+    backgroundColor: colors.surface2,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
@@ -1972,7 +2146,7 @@ return StyleSheet.create({
     gap: 10,
   },
   featureTile: {
-    backgroundColor: '#0B101B',
+    backgroundColor: colors.surface2,
     borderColor: colors.border,
     borderRadius: 10,
     borderWidth: 1,
@@ -2037,7 +2211,7 @@ return StyleSheet.create({
   secondaryWideText: { color: colors.textStrong, fontWeight: '900' },
   loader: { marginTop: 18 },
   bottomTabs: {
-    backgroundColor: '#0F1B2F',
+    backgroundColor: colors.tabBg,
     borderTopColor: colors.border,
     borderTopWidth: 1,
     bottom: 0,
@@ -2057,7 +2231,7 @@ return StyleSheet.create({
     paddingVertical: 6,
   },
   activeTabItem: {
-    backgroundColor: 'rgba(0,196,140,0.14)',
+    backgroundColor: colors.surface2,
   },
   tabIcon: {
     color: colors.muted,
@@ -2098,6 +2272,74 @@ return StyleSheet.create({
   },
   activeThemeChipText: {
     color: '#FFFFFF',
+  },
+  settingRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  toggleTrack: {
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    width: 58,
+  },
+  toggleTrackActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  toggleThumb: {
+    backgroundColor: colors.muted,
+    borderRadius: 13,
+    height: 26,
+    width: 26,
+  },
+  toggleThumbActive: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#FFFFFF',
+  },
+  verifyButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+  },
+  verifyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  supportRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    paddingVertical: 15,
+  },
+  supportIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+    borderRadius: 10,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  supportTitle: {
+    color: colors.textStrong,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  supportChevron: {
+    transform: [{ rotate: '180deg' }],
   },
   profileLogoutButton: {
     alignItems: 'center',
@@ -2181,8 +2423,8 @@ return StyleSheet.create({
     marginTop: 8,
   },
   detailCard: {
-    backgroundColor: '#202128',
-    borderColor: '#373942',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 24,
@@ -2205,6 +2447,7 @@ return StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '900',
+    lineHeight: 22,
     textAlign: 'right',
   },
 });
