@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import {
+  BarChart3,
+  Bell as BellIcon,
+  ChevronLeft,
+  Home as HomeIcon,
+  Repeat2,
+  User,
+  Wallet,
+} from 'lucide-react-native';
+import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
@@ -106,11 +115,34 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [indices, setIndices] = useState<Array<{ symbol: string; ltp: number; changePercent: number }>>([]);
   const [intelligence, setIntelligence] = useState<IntelligenceData | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [typedTitle, setTypedTitle] = useState('');
+
+  useEffect(() => {
+    if (screen.id !== 9) {
+      setTypedTitle(screenTitle(screen.name));
+      return;
+    }
+
+    const title = 'TradeIQ';
+    setTypedTitle('');
+    let index = 0;
+    const timer = setInterval(() => {
+      index += 1;
+      setTypedTitle(title.slice(0, index));
+      if (index >= title.length) {
+        clearInterval(timer);
+      }
+    }, 90);
+
+    return () => clearInterval(timer);
+  }, [screen.id, screen.name]);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadData() {
+      setDataLoading(true);
       try {
         const [dashboardData, profileData, indexData, intelligenceData] = await Promise.all([
           getDashboardData(),
@@ -128,6 +160,10 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
       } catch {
         if (mounted) {
           showToast('Unable to load live app data');
+        }
+      } finally {
+        if (mounted) {
+          setDataLoading(false);
         }
       }
     }
@@ -364,32 +400,40 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           <View style={styles.backSpacer} />
         ) : (
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
-            <Text style={styles.backIcon}>{'<'}</Text>
+            <ChevronLeft color={colors.textStrong} size={30} strokeWidth={3} />
           </TouchableOpacity>
         )}
-        <Text style={styles.headerTitle}>{screenTitle(screen.name)}</Text>
+        <Text style={[styles.headerTitle, screen.id === 9 && styles.brandHeaderTitle]}>
+          {typedTitle}
+        </Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.iconButton} onPress={() => onNavigate(28)}>
-            <Text style={styles.iconButtonText}>Bell</Text>
+            <BellIcon color={colors.textStrong} size={20} strokeWidth={2.6} />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Hero screen={screen} dashboard={dashboard} />
+        {dataLoading ? (
+          <SkeletonScreen compact={screen.id !== 9} />
+        ) : (
+          <>
+            <Hero screen={screen} dashboard={dashboard} />
 
-        {renderScreenBody(
-          screen,
-          formState,
-          setFormState,
-          results,
-          onNavigate,
-          handleFcmSetup,
-          dashboard,
-          profile,
-          indices,
-          intelligence,
-          onLogout,
+            {renderScreenBody(
+              screen,
+              formState,
+              setFormState,
+              results,
+              onNavigate,
+              handleFcmSetup,
+              dashboard,
+              profile,
+              indices,
+              intelligence,
+              onLogout,
+            )}
+          </>
         )}
 
         <View style={styles.actionGrid}>
@@ -420,7 +464,7 @@ function Hero({ screen, dashboard }: { screen: ScreenSpec; dashboard: DashboardD
   if ([9, 11, 15, 20, 22, 23, 24].includes(screen.id)) {
     return (
       <View style={styles.heroCard}>
-        <Text style={styles.heroLabel}>{screenTitle(screen.name)}</Text>
+        <Text style={styles.heroLabel}>{screen.id === 9 ? 'TradeIQ' : screenTitle(screen.name)}</Text>
         <Text style={styles.heroValue}>
           {screen.id === 9
             ? dashboard?.summary.primaryMetric ?? 'Loading...'
@@ -431,6 +475,47 @@ function Hero({ screen, dashboard }: { screen: ScreenSpec; dashboard: DashboardD
   }
 
   return <Text style={styles.pageTitle}>{screenTitle(screen.name)}</Text>;
+}
+
+function SkeletonScreen({ compact }: { compact?: boolean }) {
+  return (
+    <>
+      <View style={styles.skeletonHero}>
+        <View style={[styles.skeletonBlock, styles.skeletonSmall]} />
+        <View style={[styles.skeletonBlock, styles.skeletonLarge]} />
+      </View>
+      {!compact ? (
+        <>
+          <View style={styles.skeletonGrid}>
+            <View style={[styles.skeletonBlock, styles.skeletonTile]} />
+            <View style={[styles.skeletonBlock, styles.skeletonTile]} />
+          </View>
+          <View style={styles.skeletonCard}>
+            <View style={[styles.skeletonBlock, styles.skeletonTitle]} />
+            <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+            <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+            <View style={[styles.skeletonBlock, styles.skeletonLineShort]} />
+          </View>
+          <View style={styles.skeletonGrid}>
+            <View style={[styles.skeletonBlock, styles.skeletonTallTile]} />
+            <View style={[styles.skeletonBlock, styles.skeletonTallTile]} />
+          </View>
+          <View style={styles.skeletonCard}>
+            <View style={[styles.skeletonBlock, styles.skeletonTitle]} />
+            <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+            <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+          </View>
+        </>
+      ) : (
+        <View style={styles.skeletonCard}>
+          <View style={[styles.skeletonBlock, styles.skeletonTitle]} />
+          <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+          <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+          <View style={[styles.skeletonBlock, styles.skeletonLineShort]} />
+        </View>
+      )}
+    </>
+  );
 }
 
 function renderScreenBody(
@@ -1032,27 +1117,27 @@ function BottomTabs({
   onNavigate: (screenId: number) => void;
 }) {
   const tabs = [
-    { label: 'Home', icon: 'Home', screenId: 9 },
-    { label: 'Holdings', icon: 'Chart', screenId: 20 },
-    { label: 'Trade', icon: 'Trade', screenId: 14 },
-    { label: 'Wallet', icon: 'Wallet', screenId: 11 },
-    { label: 'Alerts', icon: 'Bell', screenId: 27 },
-    { label: 'Profile', icon: 'User', screenId: 13 },
+    { label: 'Home', Icon: HomeIcon, screenId: 9 },
+    { label: 'Holdings', Icon: BarChart3, screenId: 20 },
+    { label: 'Trade', Icon: Repeat2, screenId: 14 },
+    { label: 'Wallet', Icon: Wallet, screenId: 11 },
+    { label: 'Alerts', Icon: BellIcon, screenId: 27 },
+    { label: 'Profile', Icon: User, screenId: 13 },
   ];
 
   return (
     <View style={styles.bottomTabs}>
       {tabs.map(tab => {
         const active = tab.screenId === activeScreenId;
+        const iconColor = active ? colors.accent : colors.muted;
+        const Icon = tab.Icon;
         return (
           <TouchableOpacity
             key={tab.label}
             style={[styles.tabItem, active && styles.activeTabItem]}
             onPress={() => onNavigate(tab.screenId)}
           >
-            <Text style={[styles.tabIcon, active && styles.activeTabText]}>
-              {tab.icon}
-            </Text>
+            <Icon color={iconColor} size={22} strokeWidth={active ? 2.8 : 2.2} />
             <Text style={[styles.tabLabel, active && styles.activeTabText]}>
               {tab.label}
             </Text>
@@ -1141,6 +1226,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
+  brandHeaderTitle: {
+    fontSize: 24,
+    letterSpacing: 0,
+  },
   headerActions: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -1152,7 +1241,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     height: 36,
     justifyContent: 'center',
-    width: 48,
+    width: 44,
   },
   iconButtonText: {
     color: colors.textStrong,
@@ -1239,6 +1328,63 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 16,
     padding: 18,
+  },
+  skeletonHero: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 18,
+  },
+  skeletonCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 16,
+  },
+  skeletonGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  skeletonBlock: {
+    backgroundColor: '#202838',
+    borderRadius: 8,
+    opacity: 0.72,
+  },
+  skeletonSmall: {
+    height: 16,
+    marginBottom: 18,
+    width: 86,
+  },
+  skeletonLarge: {
+    height: 36,
+    width: '68%',
+  },
+  skeletonTile: {
+    flex: 1,
+    height: 104,
+  },
+  skeletonTallTile: {
+    flex: 1,
+    height: 190,
+  },
+  skeletonTitle: {
+    height: 24,
+    marginBottom: 18,
+    width: '52%',
+  },
+  skeletonLine: {
+    height: 16,
+    marginBottom: 14,
+    width: '100%',
+  },
+  skeletonLineShort: {
+    height: 16,
+    width: '62%',
   },
   heroLabel: { color: colors.muted, fontSize: 13, fontWeight: '800' },
   heroValue: {
@@ -1596,9 +1742,9 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     color: colors.muted,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    marginTop: 3,
+    marginTop: 4,
   },
   activeTabText: {
     color: colors.accent,
