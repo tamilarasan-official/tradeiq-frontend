@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
   BarChart3,
@@ -41,6 +41,8 @@ import {
 } from '../../services/api';
 import { registerFcmToken, signInWithGoogle } from '../../services/firebase';
 import { colors } from '../../theme/colors';
+import { useTheme } from '../../theme/ThemeContext';
+import type { ThemeMode, TradeIQColors } from '../../theme/theme';
 import type { ScreenSpec } from '../../types/screens';
 import { showToast } from '../../utils/toast';
 
@@ -112,6 +114,7 @@ type Props = {
 };
 
 export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) {
+  const { theme, mode, setMode } = useTheme();
   const [formState, setFormState] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Array<{ symbol: string; companyName: string; ltp: number; changePercent: number }>>([]);
@@ -121,6 +124,8 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
   const [intelligence, setIntelligence] = useState<IntelligenceData | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [typedTitle, setTypedTitle] = useState('');
+  Object.assign(colors, theme.colors);
+  styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
 
   useEffect(() => {
     if (screen.id !== 9) {
@@ -437,6 +442,8 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
               indices,
               intelligence,
               onLogout,
+              mode,
+              setMode,
             )}
           </>
         )}
@@ -538,6 +545,8 @@ function renderScreenBody(
   indices: Array<{ symbol: string; ltp: number; changePercent: number }>,
   intelligence: IntelligenceData | null,
   onLogout?: () => void,
+  themeMode?: ThemeMode,
+  setThemeMode?: (mode: ThemeMode) => void,
 ) {
   if (screen.id === 6) {
     return (
@@ -676,6 +685,24 @@ function renderScreenBody(
           <TouchableOpacity style={styles.secondaryWideButton} onPress={handleFcmSetup}>
             <Text style={styles.secondaryWideText}>Enable Push Notifications</Text>
           </TouchableOpacity>
+        </View>
+
+        <SectionLabel title="Appearance" />
+        <View style={styles.detailCard}>
+          <Text style={styles.mutedText}>Choose the color mode for TradeIQ on this device.</Text>
+          <View style={styles.themeSwitchRow}>
+            {(['system', 'dark', 'light'] as ThemeMode[]).map(item => (
+              <TouchableOpacity
+                key={item}
+                style={[styles.themeChip, themeMode === item && styles.activeThemeChip]}
+                onPress={() => setThemeMode?.(item)}
+              >
+                <Text style={[styles.themeChipText, themeMode === item && styles.activeThemeChipText]}>
+                  {item === 'system' ? 'System' : item === 'dark' ? 'Dark' : 'Light'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
         <TouchableOpacity
           style={styles.profileLogoutButton}
@@ -1367,7 +1394,12 @@ function screenTitle(name: string) {
     .replace('Dashboard / ', '');
 }
 
-const styles = StyleSheet.create({
+let styles = createStyles(colors);
+
+// Keeps the large screen stylesheet tokenized without rewriting every style key.
+// eslint-disable-next-line @typescript-eslint/no-shadow
+function createStyles(colors: TradeIQColors) {
+return StyleSheet.create({
   wrapper: { backgroundColor: colors.bg, flex: 1 },
   topbar: {
     alignItems: 'center',
@@ -2041,6 +2073,32 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: colors.accent,
   },
+  themeSwitchRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  themeChip: {
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: 11,
+  },
+  activeThemeChip: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  themeChipText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  activeThemeChipText: {
+    color: '#FFFFFF',
+  },
   profileLogoutButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(255,77,77,0.14)',
@@ -2150,3 +2208,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
+}

@@ -5,6 +5,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { clearBackendSession, restoreBackendSession } from '../services/api';
 import { colors } from '../theme/colors';
+import { ThemeProvider, useTheme } from '../theme/ThemeContext';
 import { screenRegistry } from './specScreens';
 
 const store = configureStore({ reducer: {} });
@@ -12,17 +13,35 @@ const store = configureStore({ reducer: {} });
 export default function TradeIQApp() {
   return (
     <Provider store={store}>
-      <SafeAreaProvider>
-        <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
-        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-          <MobileShell />
-        </SafeAreaView>
-      </SafeAreaProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <ThemedAppFrame />
+        </SafeAreaProvider>
+      </ThemeProvider>
     </Provider>
   );
 }
 
+function ThemedAppFrame() {
+  const { theme, resolvedMode } = useTheme();
+
+  Object.assign(colors, theme.colors);
+
+  return (
+    <>
+      <StatusBar
+        barStyle={resolvedMode === 'dark' ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.colors.bg}
+      />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.bg }]} edges={['top', 'left', 'right']}>
+        <MobileShell />
+      </SafeAreaView>
+    </>
+  );
+}
+
 function MobileShell() {
+  const { theme } = useTheme();
   const [currentScreenId, setCurrentScreenId] = useState(5);
   const [booting, setBooting] = useState(true);
   const [_history, setHistory] = useState<number[]>([]);
@@ -71,7 +90,7 @@ function MobileShell() {
   }
 
   if (booting) {
-    return <ActivityIndicator color={colors.buy} style={styles.loader} />;
+    return <ActivityIndicator color={theme.colors.buy} style={styles.loader} />;
   }
 
   return <ActiveScreen onBack={goBack} onNavigate={navigate} onLogout={logout} />;
