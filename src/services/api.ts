@@ -58,6 +58,21 @@ export async function loginWithGoogleProfile(input: {
   return setBackendSession(response.data);
 }
 
+export async function registerWithPassword(input: {
+  fullName: string;
+  mobile: string;
+  email: string;
+  panNumber: string;
+  password: string;
+  studyGroup: 'APP' | 'CONTROL' | 'NONE';
+}) {
+  const response = await api.post<{
+    accessToken: string;
+    user: { _id: string; fullName: string; email: string };
+  }>('/api/auth/register', input);
+  return setBackendSession(response.data);
+}
+
 export async function getBackendHealth() {
   const response = await api.get<{ status: string; service: string }>('/health');
   return response.data;

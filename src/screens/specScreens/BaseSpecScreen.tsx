@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,16 +13,20 @@ import {
   DashboardData,
   ProfileData,
   getDashboardData,
+  getMarketIndices,
   getProfileData,
   loginWithGoogleProfile,
   loginWithPassword,
   placePaperOrder,
+  registerWithPassword,
   searchStocks,
 } from '../../services/api';
 import { registerFcmToken, signInWithGoogle } from '../../services/firebase';
 import { colors } from '../../theme/colors';
 import type { ScreenSpec } from '../../types/screens';
 import { showToast } from '../../utils/toast';
+
+const tradeIqLogo = require('../../Assets/TradeIQ_logo_v3.png');
 
 type Props = {
   screen: ScreenSpec;
@@ -36,20 +41,23 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
   const [results, setResults] = useState<Array<{ symbol: string; companyName: string; ltp: number; changePercent: number }>>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [indices, setIndices] = useState<Array<{ symbol: string; ltp: number; changePercent: number }>>([]);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadData() {
       try {
-        const [dashboardData, profileData] = await Promise.all([
+        const [dashboardData, profileData, indexData] = await Promise.all([
           getDashboardData(),
           getProfileData(),
+          getMarketIndices(),
         ]);
 
         if (mounted) {
           setDashboard(dashboardData);
           setProfile(profileData);
+          setIndices(indexData);
         }
       } catch {
         if (mounted) {
@@ -58,7 +66,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
       }
     }
 
-    if (screen.id !== 5) {
+    if (screen.id > 8) {
       loadData();
     }
 
@@ -84,6 +92,20 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
         );
         showToast(`Welcome ${user.fullName}`);
         onNavigate(9);
+        return;
+      }
+
+      if (screen.id === 4 && action.toLowerCase() === 'create account') {
+        const user = await registerWithPassword({
+          fullName: formState['Full name'] ?? '',
+          mobile: formState.Mobile ?? '',
+          email: formState.Email ?? '',
+          panNumber: (formState.PAN ?? '').toUpperCase(),
+          password: formState.Password ?? '',
+          studyGroup: 'APP',
+        });
+        showToast(`Account created for ${user.fullName}`);
+        onNavigate(7);
         return;
       }
 
@@ -151,10 +173,9 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
     return (
       <View style={styles.wrapper}>
         <ScrollView contentContainerStyle={styles.loginContent}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoText}>TQ</Text>
-          </View>
+          <Image source={tradeIqLogo} style={styles.authLogo} resizeMode="contain" />
           <Text style={styles.loginTitle}>Welcome back</Text>
+          <Text style={styles.loginSubtitle}>Trade, track, and manage your portfolio securely.</Text>
 
           <Input
             label="Email or mobile"
@@ -195,6 +216,38 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
             <Text style={styles.linkText}>Forgot password?</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity onPress={() => onNavigate(4)}>
+            <Text style={styles.createAccountText}>Create account</Text>
+          </TouchableOpacity>
+
+          {loading ? <ActivityIndicator color={colors.buy} style={styles.loader} /> : null}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (screen.id === 4) {
+    return (
+      <View style={styles.wrapper}>
+        <ScrollView contentContainerStyle={styles.loginContent}>
+          <Image source={tradeIqLogo} style={styles.authLogo} resizeMode="contain" />
+          <Text style={styles.loginTitle}>Create account</Text>
+          <Text style={styles.loginSubtitle}>Open your TradeIQ profile and continue KYC.</Text>
+
+          <Input label="Full name" placeholder="Full name" value={formState['Full name'] ?? ''} onChangeText={value => setFormState(current => ({ ...current, 'Full name': value }))} />
+          <Input label="Mobile" placeholder="10 digit mobile number" keyboardType="number-pad" value={formState.Mobile ?? ''} onChangeText={value => setFormState(current => ({ ...current, Mobile: value }))} />
+          <Input label="Email" placeholder="Email address" value={formState.Email ?? ''} onChangeText={value => setFormState(current => ({ ...current, Email: value }))} />
+          <Input label="PAN" placeholder="ABCDE1234F" value={formState.PAN ?? ''} onChangeText={value => setFormState(current => ({ ...current, PAN: value.toUpperCase() }))} />
+          <Input label="Password" placeholder="Minimum 8 characters" secureTextEntry value={formState.Password ?? ''} onChangeText={value => setFormState(current => ({ ...current, Password: value }))} />
+
+          <TouchableOpacity style={styles.primaryButton} onPress={() => handleAction('Create Account')} disabled={loading}>
+            <Text style={styles.primaryButtonText}>Create account</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => onNavigate(5)}>
+            <Text style={styles.createAccountText}>Already have an account? Login</Text>
+          </TouchableOpacity>
+
           {loading ? <ActivityIndicator color={colors.buy} style={styles.loader} /> : null}
         </ScrollView>
       </View>
@@ -205,7 +258,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
     <View style={styles.wrapper}>
       <View style={styles.topbar}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backIcon}>‹</Text>
+          <Text style={styles.backIcon}>{'<'}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{screenTitle(screen.name)}</Text>
         <View style={styles.headerActions}>
@@ -236,6 +289,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           handleFcmSetup,
           dashboard,
           profile,
+          indices,
         )}
 
         <View style={styles.actionGrid}>
@@ -288,6 +342,7 @@ function renderScreenBody(
   handleFcmSetup: () => void,
   dashboard: DashboardData | null,
   profile: ProfileData | null,
+  indices: Array<{ symbol: string; ltp: number; changePercent: number }>,
 ) {
   if (screen.id === 6) {
     return (
@@ -323,6 +378,7 @@ function renderScreenBody(
           <InfoTile title="Invested" value={dashboard?.summary.invested ?? 'Loading...'} />
           <InfoTile title="Current" value={dashboard?.summary.current ?? 'Loading...'} tone="positive" />
         </View>
+        <IndicesStrip indices={indices} />
         <MarketList onNavigate={onNavigate} watchlist={dashboard?.watchlist ?? []} />
         <OrderList orders={dashboard?.orders ?? []} />
       </>
@@ -479,6 +535,7 @@ function MarketList({
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Watchlist</Text>
+      {watchlist.length === 0 ? <EmptyState title="No watchlist stocks" /> : null}
       {watchlist.map(item => (
         <TouchableOpacity key={item.symbol} style={styles.listRow} onPress={() => onNavigate(15)}>
           <View>
@@ -505,6 +562,7 @@ function HoldingsList({
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Holdings</Text>
+      {holdings.length === 0 ? <EmptyState title="No holdings yet" /> : null}
       {holdings.map(item => (
         <TouchableOpacity key={item.symbol} style={styles.listRow} onPress={() => onNavigate(15)}>
           <View>
@@ -522,6 +580,7 @@ function OrderList({ orders }: { orders: DashboardData['orders'] }) {
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Orders</Text>
+      {orders.length === 0 ? <EmptyState title="No orders yet" /> : null}
       {orders.map(item => (
         <View key={`${item.symbol}-${item.status}`} style={styles.listRow}>
           <View>
@@ -531,6 +590,34 @@ function OrderList({ orders }: { orders: DashboardData['orders'] }) {
           <Text style={styles.statusPill}>{item.status}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+function IndicesStrip({ indices }: { indices: Array<{ symbol: string; ltp: number; changePercent: number }> }) {
+  if (indices.length === 0) {
+    return null;
+  }
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.indicesScroller}>
+      {indices.map(index => (
+        <View key={index.symbol} style={styles.indexCard}>
+          <Text style={styles.indexSymbol}>{index.symbol}</Text>
+          <Text style={styles.indexPrice}>{index.ltp.toLocaleString('en-IN')}</Text>
+          <Text style={index.changePercent >= 0 ? styles.positive : styles.negative}>
+            {index.changePercent >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%
+          </Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+function EmptyState({ title }: { title: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyText}>{title}</Text>
     </View>
   );
 }
@@ -575,12 +662,12 @@ function BottomTabs({
   onNavigate: (screenId: number) => void;
 }) {
   const tabs = [
-    { label: 'Home', icon: '⌂', screenId: 9 },
-    { label: 'Holdings', icon: '◴', screenId: 20 },
-    { label: 'Trade', icon: '⇄', screenId: 14 },
-    { label: 'Wallet', icon: '▣', screenId: 11 },
+    { label: 'Home', icon: 'H', screenId: 9 },
+    { label: 'Holdings', icon: 'P', screenId: 20 },
+    { label: 'Trade', icon: '+', screenId: 14 },
+    { label: 'Wallet', icon: 'W', screenId: 11 },
     { label: 'Alerts', icon: '!', screenId: 27 },
-    { label: 'Profile', icon: '●', screenId: 13 },
+    { label: 'Profile', icon: 'U', screenId: 13 },
   ];
 
   return (
@@ -609,7 +696,7 @@ function BottomTabs({
 function nextScreenForAction(screenId: number, action: string) {
   const key = `${screenId}:${action.toLowerCase()}`;
   const map: Record<string, number> = {
-    '4:create account': 3,
+    '4:create account': 7,
     '4:login': 5,
     '5:login': 6,
     '5:reset password': 6,
@@ -716,6 +803,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  authLogo: {
+    alignSelf: 'center',
+    height: 92,
+    marginBottom: 18,
+    width: 180,
+  },
   logoMark: {
     alignItems: 'center',
     alignSelf: 'center',
@@ -731,7 +824,14 @@ const styles = StyleSheet.create({
     color: colors.textStrong,
     fontSize: 34,
     fontWeight: '900',
-    marginBottom: 28,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loginSubtitle: {
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 24,
     textAlign: 'center',
   },
   pageTitle: {
@@ -835,6 +935,13 @@ const styles = StyleSheet.create({
     marginTop: 18,
     textAlign: 'center',
   },
+  createAccountText: {
+    color: colors.buy,
+    fontSize: 15,
+    fontWeight: '900',
+    marginTop: 18,
+    textAlign: 'center',
+  },
   actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -868,6 +975,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
   },
+  indicesScroller: {
+    marginBottom: 16,
+  },
+  indexCard: {
+    backgroundColor: '#101B2D',
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginRight: 10,
+    minWidth: 124,
+    padding: 12,
+  },
+  indexSymbol: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  indexPrice: {
+    color: colors.textStrong,
+    fontSize: 18,
+    fontWeight: '900',
+    marginVertical: 5,
+  },
+  emptyState: {
+    alignItems: 'center',
+    backgroundColor: '#0B101B',
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 16,
+  },
+  emptyText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '800',
+  },
   secondaryWideButton: {
     alignItems: 'center',
     backgroundColor: colors.surface2,
@@ -877,15 +1020,15 @@ const styles = StyleSheet.create({
   secondaryWideText: { color: colors.textStrong, fontWeight: '900' },
   loader: { marginTop: 18 },
   bottomTabs: {
-    backgroundColor: '#12213A',
+    backgroundColor: '#0F1B2F',
     borderTopColor: colors.border,
     borderTopWidth: 1,
     bottom: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
     left: 0,
-    paddingBottom: 8,
-    paddingTop: 8,
+    paddingBottom: 10,
+    paddingTop: 9,
     position: 'absolute',
     right: 0,
   },
@@ -897,11 +1040,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   activeTabItem: {
-    backgroundColor: 'rgba(79,142,247,0.12)',
+    backgroundColor: 'rgba(0,196,140,0.14)',
   },
   tabIcon: {
     color: colors.muted,
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '900',
   },
   tabLabel: {
