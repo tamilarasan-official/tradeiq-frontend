@@ -129,6 +129,7 @@ export type DashboardData = {
     invested: string;
     current: string;
   };
+  wallet?: WalletData;
   watchlist: Array<{
     symbol: string;
     exchange: string;
@@ -145,6 +146,23 @@ export type DashboardData = {
     detail: string;
     status: string;
   }>;
+};
+
+export type WalletTransaction = {
+  amount: string;
+  rawAmount?: number;
+  type: 'CREDIT' | 'DEBIT';
+  status: 'SUCCESS' | 'PROCESSING' | 'FAILED';
+  provider?: string;
+  referenceId: string;
+  description: string;
+  createdAt?: string;
+};
+
+export type WalletData = {
+  balance: string | number;
+  formattedBalance?: string;
+  transactions: WalletTransaction[];
 };
 
 export type ProfileData = {
@@ -197,6 +215,16 @@ export type IntelligenceData = {
 
 export async function getDashboardData() {
   const response = await api.get<{ data: DashboardData }>('/api/dashboard');
+  return response.data.data;
+}
+
+export async function addWalletFunds(amount: number) {
+  const response = await api.post<{
+    data: {
+      wallet: WalletData;
+      transaction: WalletTransaction;
+    };
+  }>('/api/wallet/add-funds', { amount });
   return response.data.data;
 }
 

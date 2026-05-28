@@ -3,7 +3,9 @@ import axios from 'axios';
 import {
   BarChart3,
   Bell as BellIcon,
+  CheckCircle2,
   ChevronLeft,
+  CreditCard,
   Home as HomeIcon,
   Repeat2,
   User,
@@ -13,6 +15,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -25,6 +28,7 @@ import {
   DashboardData,
   IntelligenceData,
   ProfileData,
+  addWalletFunds,
   getDashboardData,
   getIntelligenceOverview,
   getMarketIndices,
@@ -428,6 +432,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
               onNavigate,
               handleFcmSetup,
               dashboard,
+              setDashboard,
               profile,
               indices,
               intelligence,
@@ -528,6 +533,7 @@ function renderScreenBody(
   onNavigate: (screenId: number) => void,
   handleFcmSetup: () => void,
   dashboard: DashboardData | null,
+  setDashboard: React.Dispatch<React.SetStateAction<DashboardData | null>>,
   profile: ProfileData | null,
   indices: Array<{ symbol: string; ltp: number; changePercent: number }>,
   intelligence: IntelligenceData | null,
@@ -587,6 +593,7 @@ function renderScreenBody(
         formState={formState}
         setFormState={setFormState}
         dashboard={dashboard}
+        setDashboard={setDashboard}
       />
     );
   }
@@ -1065,37 +1072,87 @@ function WalletScreen({
   formState,
   setFormState,
   dashboard,
+  setDashboard,
 }: {
   formState: Record<string, string>;
   setFormState: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   dashboard: DashboardData | null;
+  setDashboard: React.Dispatch<React.SetStateAction<DashboardData | null>>;
 }) {
+  const [paymentState, setPaymentState] = useState<'idle' | 'processing' | 'success'>('idle');
   const amount = formState.Amount ?? '';
-  const invested = parseInr(dashboard?.summary.invested);
-  const current = parseInr(dashboard?.summary.current);
-  const available = Math.max(current - invested, 0);
-  const formattedAvailable = `INR ${available.toLocaleString('en-IN')}`;
+  const walletBalance = dashboard?.wallet?.balance;
+  const formattedAvailable =
+    typeof walletBalance === 'number'
+      ? `INR ${walletBalance.toLocaleString('en-IN')}`
+      : walletBalance ?? dashboard?.wallet?.formattedBalance ?? 'INR 0';
 
   const setAmount = (value: string) => {
     setFormState(currentState => ({ ...currentState, Amount: value.replace(/[^0-9]/g, '') }));
   };
 
-  const handleWalletAction = (action: 'add' | 'withdraw') => {
+  const handleWalletAction = async (action: 'add' | 'withdraw') => {
     const numericAmount = Number(amount);
     if (!numericAmount || numericAmount < 100) {
       showToast('Enter an amount of INR 100 or more');
       return;
     }
 
-    showToast(
-      action === 'add'
-        ? 'Add funds flow ready. Connect Razorpay or broker ledger to credit real balance.'
-        : 'Withdrawal flow ready. Connect broker ledger before real payout.',
-    );
+    if (action === 'withdraw') {
+      showToast('Withdrawals will be enabled with broker ledger integration');
+      return;
+    }
+
+    try {
+      setPaymentState('processing');
+      await new Promise<void>(resolve => setTimeout(resolve, 1400));
+      const result = await addWalletFunds(numericAmount);
+      setDashboard(currentDashboard =>
+        currentDashboard
+          ? {
+              ...currentDashboard,
+              wallet: {
+                balance: result.wallet.formattedBalance ?? result.wallet.balance ?? formattedAvailable,
+                transactions: result.wallet.transactions,
+              },
+            }
+          : currentDashboard,
+      );
+      setPaymentState('success');
+      setAmount('');
+      showToast(`INR ${numericAmount.toLocaleString('en-IN')} added to paper wallet`);
+      setTimeout(() => setPaymentState('idle'), 1700);
+    } catch (error) {
+      setPaymentState('idle');
+      showToast(getApiErrorMessage(error, 'Unable to add funds'));
+    }
   };
 
   return (
     <>
+      <Modal visible={paymentState !== 'idle'} animationType="fade">
+        <View style={styles.paymentModal}>
+          {paymentState === 'processing' ? (
+            <>
+              <View style={styles.paymentIconCircle}>
+                <CreditCard color={colors.accent} size={38} strokeWidth={2.5} />
+              </View>
+              <ActivityIndicator color={colors.buy} size="large" style={styles.paymentSpinner} />
+              <Text style={styles.paymentTitle}>Processing payment</Text>
+              <Text style={styles.paymentText}>Adding INR {Number(amount || 0).toLocaleString('en-IN')} to your paper wallet</Text>
+            </>
+          ) : (
+            <>
+              <View style={[styles.paymentIconCircle, styles.paymentSuccessCircle]}>
+                <CheckCircle2 color={colors.bg} size={46} strokeWidth={2.8} />
+              </View>
+              <Text style={styles.paymentTitle}>Payment successful</Text>
+              <Text style={styles.paymentText}>Amount added to your TradeIQ paper wallet</Text>
+            </>
+          )}
+        </View>
+      </Modal>
+
       <View style={styles.walletBalanceCard}>
         <Text style={styles.walletBalanceLabel}>Trading balance</Text>
         <Text style={styles.walletBalanceValue}>{formattedAvailable}</Text>
@@ -1139,7 +1196,21 @@ function WalletScreen({
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Transaction history</Text>
-        <EmptyState title="No wallet transactions yet" />
+        {!dashboard?.wallet?.transactions?.length ? <EmptyState title="No wallet transactions yet" /> : null}
+        {dashboard?.wallet?.transactions?.map(transaction => (
+          <View key={transaction.referenceId} style={styles.listRow}>
+            <View>
+              <Text style={styles.symbol}>{transaction.type === 'CREDIT' ? 'Funds added' : 'Withdrawal'}</Text>
+              <Text style={styles.mutedText}>{transaction.referenceId}</Text>
+            </View>
+            <View style={styles.alignRight}>
+              <Text style={transaction.type === 'CREDIT' ? styles.positive : styles.negative}>
+                {transaction.type === 'CREDIT' ? '+' : '-'}{transaction.amount}
+              </Text>
+              <Text style={styles.statusPill}>{transaction.status}</Text>
+            </View>
+          </View>
+        ))}
       </View>
     </>
   );
@@ -1628,6 +1699,44 @@ const styles = StyleSheet.create({
     color: colors.textStrong,
     fontSize: 16,
     fontWeight: '900',
+  },
+  paymentModal: {
+    alignItems: 'center',
+    backgroundColor: colors.bg,
+    flex: 1,
+    justifyContent: 'center',
+    padding: 28,
+  },
+  paymentIconCircle: {
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
+    borderRadius: 44,
+    borderWidth: 1,
+    height: 88,
+    justifyContent: 'center',
+    width: 88,
+  },
+  paymentSuccessCircle: {
+    backgroundColor: colors.buy,
+    borderColor: colors.buy,
+  },
+  paymentSpinner: {
+    marginTop: 24,
+  },
+  paymentTitle: {
+    color: colors.textStrong,
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 24,
+    textAlign: 'center',
+  },
+  paymentText: {
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 10,
+    textAlign: 'center',
   },
   primaryButton: {
     alignItems: 'center',
