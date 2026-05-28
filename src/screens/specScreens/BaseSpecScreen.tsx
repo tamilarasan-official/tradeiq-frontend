@@ -28,6 +28,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Circle, Defs, LinearGradient, Path, Polyline, Stop } from 'react-native-svg';
 import {
   DashboardData,
   IntelligenceData,
@@ -258,7 +259,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           symbol: formState.Symbol || 'RELIANCE',
           exchange: 'NSE',
           orderType: 'MARKET',
-          transactionType: 'BUY',
+          transactionType: formState.Side === 'SELL' ? 'SELL' : 'BUY',
           product: 'CNC',
           quantity: Number(formState.Quantity || 1),
           price: Number(formState.Price || 2850),
@@ -458,6 +459,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
               results,
               onNavigate,
               handleFcmSetup,
+              handleAction,
               dashboard,
               setDashboard,
               profile,
@@ -501,7 +503,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           </>
         )}
 
-        {![9, 11, 13].includes(screen.id) ? (
+        {![9, 11, 13, 14, 15, 16, 17, 18].includes(screen.id) ? (
           <View style={styles.actionGrid}>
             {screen.actions.map(action => (
               <TouchableOpacity
@@ -592,6 +594,7 @@ function renderScreenBody(
   results: Array<{ symbol: string; companyName: string; ltp: number; changePercent: number }>,
   onNavigate: (screenId: number) => void,
   handleFcmSetup: () => void,
+  handleAction: (action: string) => void,
   dashboard: DashboardData | null,
   setDashboard: React.Dispatch<React.SetStateAction<DashboardData | null>>,
   profile: ProfileData | null,
@@ -810,22 +813,44 @@ function renderScreenBody(
 
   if (screen.id === 14) {
     return (
-      <>
-        <Input label="Search" placeholder="Search stocks" value={formState['Search query'] ?? 'RELIANCE'} onChangeText={value => setFormState(current => ({ ...current, 'Search query': value }))} />
-        {results.map(stock => (
-          <TouchableOpacity key={stock.symbol} style={styles.listRow} onPress={() => onNavigate(15)}>
-            <View>
-              <Text style={styles.symbol}>{stock.symbol}</Text>
-              <Text style={styles.mutedText}>{stock.companyName}</Text>
-            </View>
-            <Text style={stock.changePercent >= 0 ? styles.positive : styles.negative}>{stock.changePercent.toFixed(2)}%</Text>
-          </TouchableOpacity>
-        ))}
-      </>
+      <TradingScreen
+        formState={formState}
+        setFormState={setFormState}
+        results={results}
+        indices={indices}
+        onNavigate={onNavigate}
+        onSearch={() => handleAction('Search')}
+      />
     );
   }
 
-  if ([16, 17, 18, 27].includes(screen.id)) {
+  if (screen.id === 15) {
+    return <StockDetailTradingScreen setFormState={setFormState} onNavigate={onNavigate} />;
+  }
+
+  if ([16, 17].includes(screen.id)) {
+    return (
+      <OrderTicketScreen
+        side={screen.id === 17 ? 'SELL' : 'BUY'}
+        formState={formState}
+        setFormState={setFormState}
+        onNavigate={onNavigate}
+      />
+    );
+  }
+
+  if (screen.id === 18) {
+    return (
+      <OrderPreviewScreen
+        formState={formState}
+        onEdit={() => onNavigate(formState.Side === 'SELL' ? 17 : 16)}
+        onConfirm={() => handleAction('Confirm Order')}
+        loading={false}
+      />
+    );
+  }
+
+  if (screen.id === 27) {
     return (
       <View style={styles.card}>
         {(screen.fields ?? ['Symbol', 'Quantity', 'Price']).map(field => (
@@ -885,6 +910,300 @@ function Input({
         keyboardType={keyboardType}
         style={styles.input}
       />
+    </View>
+  );
+}
+
+function TradingScreen({
+  formState,
+  setFormState,
+  results,
+  indices,
+  onNavigate,
+  onSearch,
+}: {
+  formState: Record<string, string>;
+  setFormState: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  results: Array<{ symbol: string; companyName: string; ltp: number; changePercent: number }>;
+  indices: Array<{ symbol: string; ltp: number; changePercent: number }>;
+  onNavigate: (screenId: number) => void;
+  onSearch: () => void;
+}) {
+  const fallbackStocks = [
+    { symbol: 'RELIANCE', companyName: 'Reliance Industries', ltp: 2950.45, changePercent: 1.55 },
+    { symbol: 'TCS', companyName: 'Tata Consultancy Services', ltp: 3890, changePercent: 2.92 },
+    { symbol: 'HDFCBANK', companyName: 'HDFC Bank', ltp: 1450.1, changePercent: -0.84 },
+  ];
+  const stocks = results.length ? results : fallbackStocks;
+
+  return (
+    <>
+      <View style={styles.tradeSearchCard}>
+        <TextInput
+          placeholder="Search RELIANCE, TCS, INFY..."
+          placeholderTextColor={colors.muted}
+          value={formState['Search query'] ?? 'RELIANCE'}
+          onChangeText={value => setFormState(current => ({ ...current, 'Search query': value }))}
+          style={styles.tradeSearchInput}
+        />
+        <TouchableOpacity style={styles.tradeSearchButton} onPress={onSearch}>
+          <Text style={styles.quickTradeText}>Search</Text>
+        </TouchableOpacity>
+      </View>
+
+      <SectionLabel title="Indices" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tradeHorizontalList}>
+        {(indices.length ? indices : [
+          { symbol: 'NIFTY 50', ltp: 24321.4, changePercent: 0.45 },
+          { symbol: 'SENSEX', ltp: 79120.5, changePercent: -0.12 },
+          { symbol: 'BANKNIFTY', ltp: 52430.2, changePercent: 1.12 },
+        ]).map(index => (
+          <View key={index.symbol} style={styles.marketContextTile}>
+            <Text style={styles.tileTitle}>{index.symbol}</Text>
+            <Text style={styles.tileValue}>{index.ltp.toLocaleString('en-IN')}</Text>
+            <Text style={index.changePercent >= 0 ? styles.positivePill : styles.negativePill}>
+              {index.changePercent >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%
+            </Text>
+          </View>
+        ))}
+      </ScrollView>
+
+      <SectionLabel title="Top Movers" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tradeHorizontalList}>
+        {stocks.map(stock => (
+          <TouchableOpacity
+            key={stock.symbol}
+            style={styles.moverCard}
+            onPress={() => {
+              setFormState(current => ({
+                ...current,
+                Symbol: stock.symbol,
+                Price: String(stock.ltp),
+              }));
+              onNavigate(15);
+            }}
+          >
+            <View style={styles.moverAvatar}>
+              <Text style={styles.moverAvatarText}>{stock.symbol.slice(0, 1)}</Text>
+            </View>
+            <Text style={styles.symbol}>{stock.symbol}</Text>
+            <Text style={stock.changePercent >= 0 ? styles.positivePill : styles.negativePill}>
+              {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Invested in Market</Text>
+        {stocks.map(stock => (
+          <TouchableOpacity
+            key={`row-${stock.symbol}`}
+            style={styles.stockTradeRow}
+            onPress={() => {
+              setFormState(current => ({
+                ...current,
+                Symbol: stock.symbol,
+                Price: String(stock.ltp),
+              }));
+              onNavigate(15);
+            }}
+          >
+            <View style={styles.moverAvatar}>
+              <Text style={styles.moverAvatarText}>{stock.symbol.slice(0, 1)}</Text>
+            </View>
+            <View style={styles.stockTradeInfo}>
+              <Text style={styles.symbol}>{stock.companyName}</Text>
+              <Text style={styles.mutedText}>{stock.symbol}.NS</Text>
+            </View>
+            <View style={styles.alignRight}>
+              <Text style={styles.price}>INR {stock.ltp.toLocaleString('en-IN')}</Text>
+              <Text style={stock.changePercent >= 0 ? styles.positive : styles.negative}>
+                {stock.changePercent >= 0 ? '+' : ''}{stock.changePercent.toFixed(2)}%
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </>
+  );
+}
+
+function StockDetailTradingScreen({
+  setFormState,
+  onNavigate,
+}: {
+  setFormState: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onNavigate: (screenId: number) => void;
+}) {
+  const symbol = 'RELIANCE';
+  const price = '2950.45';
+
+  const startOrder = (side: 'BUY' | 'SELL') => {
+    setFormState(current => ({
+      ...current,
+      Symbol: symbol,
+      Price: price,
+      Quantity: current.Quantity ?? '1',
+      Side: side,
+      Exchange: 'NSE',
+      Product: 'CNC',
+      'Order type': 'MARKET',
+    }));
+    onNavigate(side === 'BUY' ? 16 : 17);
+  };
+
+  return (
+    <>
+      <View style={styles.stockHero}>
+        <Text style={styles.mutedText}>Reliance Industries</Text>
+        <Text style={styles.stockPrice}>INR {price}</Text>
+        <View style={styles.stockChangeRow}>
+          <Text style={styles.positivePill}>+1.55%</Text>
+          <Text style={styles.mutedText}>+INR 45.20 today</Text>
+        </View>
+        <MiniLineChart />
+        <View style={styles.rangeTabs}>
+          {['1D', '1W', '1M', '3M', '1Y'].map(range => (
+            <View key={range} style={[styles.rangeTab, range === '1M' && styles.activeRangeTab]}>
+              <Text style={[styles.rangeText, range === '1M' && styles.activeRangeText]}>{range}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <SectionLabel title="Market Stats" />
+      <View style={styles.grid}>
+        <InfoTile title="Market Cap" value="2.4T" />
+        <InfoTile title="Volume" value="5.2M" />
+        <InfoTile title="52W High" value="INR 3,541" tone="positive" />
+        <InfoTile title="52W Low" value="INR 2,360" />
+      </View>
+
+      <View style={styles.tradeActionDock}>
+        <TouchableOpacity style={styles.buyActionButton} onPress={() => startOrder('BUY')}>
+          <Text style={styles.quickTradeText}>Buy</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.sellActionButton} onPress={() => startOrder('SELL')}>
+          <Text style={styles.quickTradeText}>Sell</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+}
+
+function MiniLineChart() {
+  const points = '0,136 34,128 70,94 106,124 142,118 178,138 214,112 250,102 286,78 322,88 358,52 394,44 430,28 466,8';
+  const area = '0,136 34,128 70,94 106,124 142,118 178,138 214,112 250,102 286,78 322,88 358,52 394,44 430,28 466,8 466,160 0,160 Z';
+
+  return (
+    <View style={styles.chartBox}>
+      <Svg width="100%" height="190" viewBox="0 0 466 170">
+        <Defs>
+          <LinearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={colors.buy} stopOpacity="0.35" />
+            <Stop offset="1" stopColor={colors.buy} stopOpacity="0.02" />
+          </LinearGradient>
+        </Defs>
+        <Path d={area} fill="url(#chartFill)" />
+        <Polyline points={points} fill="none" stroke={colors.buy} strokeWidth="3" />
+        <Circle cx="466" cy="8" r="5" fill={colors.buy} />
+      </Svg>
+    </View>
+  );
+}
+
+function OrderTicketScreen({
+  side,
+  formState,
+  setFormState,
+  onNavigate,
+}: {
+  side: 'BUY' | 'SELL';
+  formState: Record<string, string>;
+  setFormState: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onNavigate: (screenId: number) => void;
+}) {
+  const price = Number(formState.Price || 2950.45);
+  const quantity = Number(formState.Quantity || 1);
+  const amount = price * quantity;
+
+  const update = (field: string, value: string) => {
+    setFormState(current => ({ ...current, [field]: value, Side: side }));
+  };
+
+  return (
+    <View style={styles.orderTicket}>
+      <View style={styles.orderHeaderRow}>
+        <View>
+          <Text style={styles.tileTitle}>{side} ORDER</Text>
+          <Text style={styles.stockPrice}>{formState.Symbol || 'RELIANCE'}</Text>
+          <Text style={styles.mutedText}>NSE | CNC | MARKET</Text>
+        </View>
+        <Text style={side === 'BUY' ? styles.positivePill : styles.negativePill}>
+          {side}
+        </Text>
+      </View>
+
+      <Input label="Quantity" placeholder="Quantity" keyboardType="number-pad" value={formState.Quantity ?? '1'} onChangeText={value => update('Quantity', value)} />
+      <Input label="Price" placeholder="Market price" keyboardType="number-pad" value={formState.Price ?? '2950.45'} onChangeText={value => update('Price', value)} />
+
+      <View style={styles.orderSummaryBox}>
+        <DetailRow label="Estimated value" value={`INR ${amount.toLocaleString('en-IN')}`} />
+        <DetailRow label="Brokerage estimate" value="INR 0" />
+        <DetailRow label="Mode" value="Paper trade" tone="positive" />
+      </View>
+
+      <TouchableOpacity
+        style={side === 'BUY' ? styles.buyActionButton : styles.sellActionButton}
+        onPress={() => {
+          setFormState(current => ({ ...current, Side: side }));
+          onNavigate(18);
+        }}
+      >
+        <Text style={styles.quickTradeText}>Preview {side}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function OrderPreviewScreen({
+  formState,
+  onEdit,
+  onConfirm,
+  loading,
+}: {
+  formState: Record<string, string>;
+  onEdit: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}) {
+  const side = formState.Side === 'SELL' ? 'SELL' : 'BUY';
+  const price = Number(formState.Price || 2950.45);
+  const quantity = Number(formState.Quantity || 1);
+
+  return (
+    <View style={styles.orderTicket}>
+      <Text style={styles.cardTitle}>Confirm paper order</Text>
+      <View style={styles.orderSummaryBox}>
+        <DetailRow label="Side" value={side} tone={side === 'BUY' ? 'positive' : undefined} />
+        <DetailRow label="Symbol" value={formState.Symbol || 'RELIANCE'} />
+        <DetailRow label="Quantity" value={`${quantity}`} />
+        <DetailRow label="Price" value={`INR ${price.toLocaleString('en-IN')}`} />
+        <DetailRow label="Estimated value" value={`INR ${(price * quantity).toLocaleString('en-IN')}`} />
+      </View>
+      <View style={styles.tradeActionDock}>
+        <TouchableOpacity style={styles.walletSecondaryButton} onPress={onEdit}>
+          <Text style={styles.walletSecondaryText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={side === 'BUY' ? styles.buyActionButton : styles.sellActionButton}
+          onPress={onConfirm}
+          disabled={loading}
+        >
+          <Text style={styles.quickTradeText}>Confirm {side}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -1803,6 +2122,180 @@ return StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '900',
+  },
+  tradeSearchCard: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 18,
+    padding: 12,
+  },
+  tradeSearchInput: {
+    backgroundColor: colors.input,
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    color: colors.textStrong,
+    flex: 1,
+    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  tradeSearchButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  tradeHorizontalList: {
+    marginBottom: 20,
+  },
+  marketContextTile: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 12,
+    minWidth: 150,
+    padding: 16,
+  },
+  positivePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surface2,
+    borderColor: colors.buy,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.buy,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  negativePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surface2,
+    borderColor: colors.sell,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.sell,
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  moverCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 12,
+    minWidth: 140,
+    padding: 14,
+  },
+  moverAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+    borderRadius: 10,
+    height: 42,
+    justifyContent: 'center',
+    marginBottom: 10,
+    width: 42,
+  },
+  moverAvatarText: {
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  stockTradeRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    paddingVertical: 14,
+  },
+  stockTradeInfo: {
+    flex: 1,
+  },
+  stockHero: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 18,
+    padding: 16,
+  },
+  stockPrice: {
+    color: colors.textStrong,
+    fontSize: 34,
+    fontWeight: '900',
+    marginTop: 8,
+  },
+  stockChangeRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  chartBox: {
+    height: 200,
+    justifyContent: 'center',
+    marginTop: 18,
+  },
+  rangeTabs: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  rangeTab: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  activeRangeTab: {
+    backgroundColor: colors.primary,
+  },
+  rangeText: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  activeRangeText: {
+    color: '#FFFFFF',
+  },
+  tradeActionDock: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 18,
+    marginTop: 8,
+  },
+  orderTicket: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 18,
+    padding: 16,
+  },
+  orderHeaderRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  orderSummaryBox: {
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    paddingHorizontal: 14,
   },
   inputGroup: { marginBottom: 14 },
   label: {
