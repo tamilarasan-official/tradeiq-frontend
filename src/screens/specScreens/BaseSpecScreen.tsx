@@ -28,7 +28,6 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Circle, Defs, LinearGradient, Path, Polyline, Stop } from 'react-native-svg';
 import {
   DashboardData,
   IntelligenceData,
@@ -794,9 +793,9 @@ function renderScreenBody(
           </View>
         </View>
         <View style={styles.detailCard}>
-          <SupportLink Icon={HelpCircle} title="Help and Support" />
-          <SupportLink Icon={ShieldCheck} title="Privacy Policy" />
-          <SupportLink Icon={FileText} title="Terms and Conditions" />
+          <SupportLink Icon={HelpCircle} title="Help and Support" onPress={() => onNavigate(29)} />
+          <SupportLink Icon={ShieldCheck} title="Privacy Policy" onPress={() => onNavigate(30)} />
+          <SupportLink Icon={FileText} title="Terms and Conditions" onPress={() => onNavigate(31)} />
         </View>
         <TouchableOpacity
           style={styles.profileLogoutButton}
@@ -825,7 +824,7 @@ function renderScreenBody(
   }
 
   if (screen.id === 15) {
-    return <StockDetailTradingScreen setFormState={setFormState} onNavigate={onNavigate} />;
+    return <StockDetailTradingScreen formState={formState} setFormState={setFormState} onNavigate={onNavigate} />;
   }
 
   if ([16, 17].includes(screen.id)) {
@@ -872,6 +871,18 @@ function renderScreenBody(
         </View>
       </>
     );
+  }
+
+  if (screen.id === 29) {
+    return <HelpSupportScreen />;
+  }
+
+  if (screen.id === 30) {
+    return <PrivacyPolicyScreen />;
+  }
+
+  if (screen.id === 31) {
+    return <TermsConditionsScreen />;
   }
 
   return (
@@ -979,6 +990,8 @@ function TradingScreen({
                 ...current,
                 Symbol: stock.symbol,
                 Price: String(stock.ltp),
+                SelectedCompany: stock.companyName,
+                ChangePercent: stock.changePercent.toFixed(2),
               }));
               onNavigate(15);
             }}
@@ -1005,6 +1018,8 @@ function TradingScreen({
                 ...current,
                 Symbol: stock.symbol,
                 Price: String(stock.ltp),
+                SelectedCompany: stock.companyName,
+                ChangePercent: stock.changePercent.toFixed(2),
               }));
               onNavigate(15);
             }}
@@ -1030,14 +1045,18 @@ function TradingScreen({
 }
 
 function StockDetailTradingScreen({
+  formState,
   setFormState,
   onNavigate,
 }: {
+  formState: Record<string, string>;
   setFormState: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onNavigate: (screenId: number) => void;
 }) {
-  const symbol = 'RELIANCE';
-  const price = '2950.45';
+  const symbol = formState.Symbol || 'RELIANCE';
+  const price = formState.Price || '2950.45';
+  const companyName = formState.SelectedCompany || 'Reliance Industries';
+  const changePercent = Number(formState.ChangePercent || 1.55);
 
   const startOrder = (side: 'BUY' | 'SELL') => {
     setFormState(current => ({
@@ -1056,11 +1075,13 @@ function StockDetailTradingScreen({
   return (
     <>
       <View style={styles.stockHero}>
-        <Text style={styles.mutedText}>Reliance Industries</Text>
+        <Text style={styles.mutedText}>{companyName}</Text>
         <Text style={styles.stockPrice}>INR {price}</Text>
         <View style={styles.stockChangeRow}>
-          <Text style={styles.positivePill}>+1.55%</Text>
-          <Text style={styles.mutedText}>+INR 45.20 today</Text>
+          <Text style={changePercent >= 0 ? styles.positivePill : styles.negativePill}>
+            {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
+          </Text>
+          <Text style={styles.mutedText}>{changePercent >= 0 ? '+' : '-'}INR 45.20 today</Text>
         </View>
         <MiniLineChart />
         <View style={styles.rangeTabs}>
@@ -1093,22 +1114,20 @@ function StockDetailTradingScreen({
 }
 
 function MiniLineChart() {
-  const points = '0,136 34,128 70,94 106,124 142,118 178,138 214,112 250,102 286,78 322,88 358,52 394,44 430,28 466,8';
-  const area = '0,136 34,128 70,94 106,124 142,118 178,138 214,112 250,102 286,78 322,88 358,52 394,44 430,28 466,8 466,160 0,160 Z';
+  const bars = [22, 28, 42, 30, 26, 18, 34, 29, 38, 50, 44, 58, 66, 82, 118];
 
   return (
     <View style={styles.chartBox}>
-      <Svg width="100%" height="190" viewBox="0 0 466 170">
-        <Defs>
-          <LinearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={colors.buy} stopOpacity="0.35" />
-            <Stop offset="1" stopColor={colors.buy} stopOpacity="0.02" />
-          </LinearGradient>
-        </Defs>
-        <Path d={area} fill="url(#chartFill)" />
-        <Polyline points={points} fill="none" stroke={colors.buy} strokeWidth="3" />
-        <Circle cx="466" cy="8" r="5" fill={colors.buy} />
-      </Svg>
+      <View style={styles.chartGridLine} />
+      <View style={[styles.chartGridLine, styles.chartGridMiddle]} />
+      <View style={styles.chartBars}>
+        {bars.map((height, index) => (
+          <View key={`${height}-${index}`} style={styles.chartBarSlot}>
+            <View style={[styles.chartBar, { height }]} />
+          </View>
+        ))}
+      </View>
+      <View style={styles.chartGlow} />
     </View>
   );
 }
@@ -1711,18 +1730,101 @@ function DashboardQuickTrade({ onNavigate }: { onNavigate: (screenId: number) =>
 function SupportLink({
   Icon,
   title,
+  onPress,
 }: {
   Icon: React.ComponentType<{ color: string; size: number; strokeWidth?: number }>;
   title: string;
+  onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.supportRow} onPress={() => showToast(`${title} will open soon`)}>
+    <TouchableOpacity style={styles.supportRow} onPress={onPress}>
       <View style={styles.supportIcon}>
         <Icon color={colors.primary} size={20} strokeWidth={2.4} />
       </View>
       <Text style={styles.supportTitle}>{title}</Text>
       <ChevronLeft color={colors.muted} size={20} style={styles.supportChevron} />
     </TouchableOpacity>
+  );
+}
+
+function HelpSupportScreen() {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Help and Support</Text>
+      <PolicySection title="Trading help" items={[
+        'Use Trade tab to search a stock, open detail, then choose Buy or Sell.',
+        'Orders are paper trades until a live broker API is connected.',
+        'Wallet Add Funds currently credits the paper wallet for demo trading.',
+      ]} />
+      <PolicySection title="Support channels" items={[
+        'Email: support@tradeiq.app',
+        'Response time: 24-48 business hours',
+        'For payment or order issues, include your order reference.',
+      ]} />
+      <PolicySection title="Safety" items={[
+        'Never share passwords, OTPs, MPINs or broker access tokens.',
+        'TradeIQ will not ask for your bank PIN or card PIN.',
+      ]} />
+    </View>
+  );
+}
+
+function PrivacyPolicyScreen() {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Privacy Policy</Text>
+      <PolicySection title="Data we collect" items={[
+        'Account details such as name, email, mobile number and KYC status.',
+        'Portfolio, watchlist, order and paper wallet activity created in the app.',
+        'Device notification token when push notifications are enabled.',
+      ]} />
+      <PolicySection title="How data is used" items={[
+        'To authenticate users and keep app sessions secure.',
+        'To show portfolio analytics, alerts, paper trading and research features.',
+        'To improve app reliability, UX and investment education workflows.',
+      ]} />
+      <PolicySection title="Your control" items={[
+        'You can logout anytime from Profile.',
+        'Biometric login can be enabled or disabled from Profile.',
+        'Production release should add account deletion and data export controls.',
+      ]} />
+    </View>
+  );
+}
+
+function TermsConditionsScreen() {
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>Terms and Conditions</Text>
+      <PolicySection title="Demo trading" items={[
+        'Current Buy/Sell flow is paper trading for demonstration and learning.',
+        'No real exchange order is placed until a licensed broker integration is connected.',
+        'Displayed demo prices may not be live market prices.',
+      ]} />
+      <PolicySection title="User responsibility" items={[
+        'You are responsible for validating orders before confirmation.',
+        'Investment decisions involve risk and may lead to loss.',
+        'TradeIQ is not financial advice unless a regulated advisory workflow is added.',
+      ]} />
+      <PolicySection title="Future broker integration" items={[
+        'Live trading requires broker OAuth, access token handling and order API verification.',
+        'Broker charges, taxes, margins and exchange rules will apply.',
+      ]} />
+    </View>
+  );
+}
+
+function PolicySection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <View style={styles.policySection}>
+      <Text style={styles.policyTitle}>{title}</Text>
+      {items.map(item => (
+        <View key={item} style={styles.bulletRow}>
+          <View style={styles.bulletDot} />
+          <Text style={styles.insightText}>{item}</Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -2247,6 +2349,45 @@ return StyleSheet.create({
     height: 200,
     justifyContent: 'center',
     marginTop: 18,
+    overflow: 'hidden',
+  },
+  chartGridLine: {
+    backgroundColor: colors.chartGrid,
+    height: 1,
+    left: 0,
+    opacity: 0.6,
+    position: 'absolute',
+    right: 0,
+    top: 48,
+  },
+  chartGridMiddle: {
+    top: 118,
+  },
+  chartBars: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 6,
+    height: 150,
+    justifyContent: 'space-between',
+  },
+  chartBarSlot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  chartBar: {
+    backgroundColor: colors.buy,
+    borderRadius: 999,
+    opacity: 0.88,
+  },
+  chartGlow: {
+    backgroundColor: colors.buy,
+    borderRadius: 999,
+    bottom: 30,
+    height: 6,
+    opacity: 0.22,
+    position: 'absolute',
+    right: 0,
+    width: 84,
   },
   rangeTabs: {
     flexDirection: 'row',
@@ -2833,6 +2974,18 @@ return StyleSheet.create({
   },
   supportChevron: {
     transform: [{ rotate: '180deg' }],
+  },
+  policySection: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    paddingBottom: 14,
+    paddingTop: 6,
+  },
+  policyTitle: {
+    color: colors.textStrong,
+    fontSize: 16,
+    fontWeight: '900',
+    marginBottom: 8,
   },
   profileLogoutButton: {
     alignItems: 'center',
