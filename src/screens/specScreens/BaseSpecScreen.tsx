@@ -397,7 +397,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
     <View style={styles.wrapper}>
       <View style={styles.topbar}>
         {screen.id === 9 ? (
-          <View style={styles.backSpacer} />
+          <Image source={tradeIqLogo} style={styles.headerLogo} resizeMode="contain" />
         ) : (
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
             <ChevronLeft color={colors.textStrong} size={30} strokeWidth={3} />
@@ -436,22 +436,24 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           </>
         )}
 
-        <View style={styles.actionGrid}>
-          {screen.actions.map(action => (
-            <TouchableOpacity
-              key={action}
-              style={[
-                styles.actionButton,
-                action.toLowerCase().includes('sell') && styles.sellButton,
-                action.toLowerCase().includes('skip') && styles.secondaryButton,
-              ]}
-              onPress={() => handleAction(action)}
-              disabled={loading}
-            >
-              <Text style={styles.actionText}>{action}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {screen.id !== 11 ? (
+          <View style={styles.actionGrid}>
+            {screen.actions.map(action => (
+              <TouchableOpacity
+                key={action}
+                style={[
+                  styles.actionButton,
+                  action.toLowerCase().includes('sell') && styles.sellButton,
+                  action.toLowerCase().includes('skip') && styles.secondaryButton,
+                ]}
+                onPress={() => handleAction(action)}
+                disabled={loading}
+              >
+                <Text style={styles.actionText}>{action}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
 
         {loading ? <ActivityIndicator color={colors.buy} style={styles.loader} /> : null}
       </ScrollView>
@@ -579,7 +581,17 @@ function renderScreenBody(
     return <MarketList onNavigate={onNavigate} watchlist={dashboard?.watchlist ?? []} />;
   }
 
-  if ([11, 20].includes(screen.id)) {
+  if (screen.id === 11) {
+    return (
+      <WalletScreen
+        formState={formState}
+        setFormState={setFormState}
+        dashboard={dashboard}
+      />
+    );
+  }
+
+  if (screen.id === 20) {
     return <HoldingsList onNavigate={onNavigate} holdings={dashboard?.holdings ?? []} />;
   }
 
@@ -1049,6 +1061,90 @@ function parseInr(value?: string) {
   return Number(String(value ?? '').replace(/[^0-9.-]/g, '')) || 0;
 }
 
+function WalletScreen({
+  formState,
+  setFormState,
+  dashboard,
+}: {
+  formState: Record<string, string>;
+  setFormState: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  dashboard: DashboardData | null;
+}) {
+  const amount = formState.Amount ?? '';
+  const invested = parseInr(dashboard?.summary.invested);
+  const current = parseInr(dashboard?.summary.current);
+  const available = Math.max(current - invested, 0);
+  const formattedAvailable = `INR ${available.toLocaleString('en-IN')}`;
+
+  const setAmount = (value: string) => {
+    setFormState(currentState => ({ ...currentState, Amount: value.replace(/[^0-9]/g, '') }));
+  };
+
+  const handleWalletAction = (action: 'add' | 'withdraw') => {
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount < 100) {
+      showToast('Enter an amount of INR 100 or more');
+      return;
+    }
+
+    showToast(
+      action === 'add'
+        ? 'Add funds flow ready. Connect Razorpay or broker ledger to credit real balance.'
+        : 'Withdrawal flow ready. Connect broker ledger before real payout.',
+    );
+  };
+
+  return (
+    <>
+      <View style={styles.walletBalanceCard}>
+        <Text style={styles.walletBalanceLabel}>Trading balance</Text>
+        <Text style={styles.walletBalanceValue}>{formattedAvailable}</Text>
+        <View style={styles.walletMetaRow}>
+          <Text style={styles.mutedText}>Invested {dashboard?.summary.invested ?? 'INR 0'}</Text>
+          <Text style={styles.positive}>Portfolio {dashboard?.summary.current ?? 'INR 0'}</Text>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Add amount to trade</Text>
+        <TextInput
+          placeholder="Enter amount"
+          placeholderTextColor={colors.muted}
+          value={amount}
+          onChangeText={setAmount}
+          keyboardType="number-pad"
+          style={styles.amountInput}
+        />
+        <View style={styles.quickAmountRow}>
+          {['1000', '5000', '10000', '25000'].map(value => (
+            <TouchableOpacity key={value} style={styles.quickAmountChip} onPress={() => setAmount(value)}>
+              <Text style={styles.quickAmountText}>INR {Number(value).toLocaleString('en-IN')}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.walletActionRow}>
+          <TouchableOpacity style={styles.walletPrimaryButton} onPress={() => handleWalletAction('add')}>
+            <Text style={styles.primaryButtonText}>Add funds</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.walletSecondaryButton} onPress={() => handleWalletAction('withdraw')}>
+            <Text style={styles.walletSecondaryText}>Withdraw</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.grid}>
+        <InfoTile title="Payment gateway" value="Pending" />
+        <InfoTile title="Broker ledger" value="Pending" />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Transaction history</Text>
+        <EmptyState title="No wallet transactions yet" />
+      </View>
+    </>
+  );
+}
+
 function IndicesStrip({ indices }: { indices: Array<{ symbol: string; ltp: number; changePercent: number }> }) {
   if (indices.length === 0) {
     return null;
@@ -1218,6 +1314,10 @@ const styles = StyleSheet.create({
   },
   backSpacer: {
     width: 40,
+  },
+  headerLogo: {
+    height: 40,
+    width: 72,
   },
   backIcon: { color: colors.textStrong, fontSize: 34, fontWeight: '400' },
   headerTitle: {
@@ -1445,6 +1545,89 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: 14,
     paddingVertical: 13,
+  },
+  amountInput: {
+    backgroundColor: '#070B12',
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    color: colors.textStrong,
+    fontSize: 26,
+    fontWeight: '900',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  walletBalanceCard: {
+    backgroundColor: '#101B2D',
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    padding: 18,
+  },
+  walletBalanceLabel: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  walletBalanceValue: {
+    color: colors.textStrong,
+    fontSize: 32,
+    fontWeight: '900',
+    marginTop: 8,
+  },
+  walletMetaRow: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 12,
+  },
+  quickAmountRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 12,
+  },
+  quickAmountChip: {
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  quickAmountText: {
+    color: colors.textStrong,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  walletActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  walletPrimaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.buy,
+    borderRadius: 10,
+    flex: 1,
+    paddingVertical: 15,
+  },
+  walletSecondaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: 15,
+  },
+  walletSecondaryText: {
+    color: colors.textStrong,
+    fontSize: 16,
+    fontWeight: '900',
   },
   primaryButton: {
     alignItems: 'center',
