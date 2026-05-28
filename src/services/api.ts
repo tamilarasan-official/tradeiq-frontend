@@ -1,4 +1,5 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const productionHost = 'https://tradeiq-backend-v0du.onrender.com';
@@ -16,6 +17,7 @@ export const api = axios.create({
 
 let accessToken: string | null = null;
 let currentUserId: string | null = null;
+const sessionStorageKey = 'tradeiq.backend.session';
 
 api.interceptors.request.use(config => {
   if (accessToken) {
@@ -24,18 +26,41 @@ api.interceptors.request.use(config => {
   return config;
 });
 
-export function clearBackendSession() {
+export async function clearBackendSession() {
   accessToken = null;
   currentUserId = null;
+  await AsyncStorage.removeItem(sessionStorageKey);
 }
 
-function setBackendSession<TUser extends { _id: string }>(session: {
+async function setBackendSession<TUser extends { _id: string }>(session: {
   accessToken: string;
   user: TUser;
 }) {
   accessToken = session.accessToken;
   currentUserId = session.user._id;
+  await AsyncStorage.setItem(sessionStorageKey, JSON.stringify(session));
   return session.user;
+}
+
+export async function restoreBackendSession() {
+  const savedSession = await AsyncStorage.getItem(sessionStorageKey);
+  if (!savedSession) {
+    return false;
+  }
+
+  const session = JSON.parse(savedSession) as {
+    accessToken?: string;
+    user?: { _id?: string };
+  };
+
+  if (!session.accessToken || !session.user?._id) {
+    await clearBackendSession();
+    return false;
+  }
+
+  accessToken = session.accessToken;
+  currentUserId = session.user._id;
+  return true;
 }
 
 export async function loginWithPassword(identifier: string, password: string) {
@@ -54,7 +79,7 @@ export async function loginWithGoogleProfile(input: {
   const response = await api.post<{
     accessToken: string;
     user: { _id: string; fullName: string; email: string };
-  }>('/api/auth/google', input);
+  }>('/api/auth/google-login', input);
   return setBackendSession(response.data);
 }
 
@@ -70,7 +95,7 @@ export async function registerWithPassword(input: {
     accessToken: string;
     user: { _id: string; fullName: string; email: string };
   }>('/api/auth/register', input);
-  return setBackendSession(response.data);
+  return response.data.user;
 }
 
 export async function getBackendHealth() {

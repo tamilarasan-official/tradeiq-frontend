@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import {
   ActivityIndicator,
   Image,
@@ -104,8 +105,8 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           password: formState.Password ?? '',
           studyGroup: 'APP',
         });
-        showToast(`Account created for ${user.fullName}`);
-        onNavigate(7);
+        showToast(`Account created for ${user.fullName}. Please login.`);
+        onNavigate(5);
         return;
       }
 
@@ -151,6 +152,15 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
       showToast(`Welcome ${user.fullName}`);
       onNavigate(9);
     } catch (error) {
+      if (
+        axios.isAxiosError(error) &&
+        error.response?.status === 404 &&
+        error.response.data?.code === 'ACCOUNT_REQUIRED'
+      ) {
+        showToast('Create your account before using Google sign-in');
+        onNavigate(4);
+        return;
+      }
       showToast(error instanceof Error ? error.message : 'Google sign-in failed');
     } finally {
       setLoading(false);
@@ -177,46 +187,48 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           <Text style={styles.loginTitle}>Welcome back</Text>
           <Text style={styles.loginSubtitle}>Trade, track, and manage your portfolio securely.</Text>
 
-          <Input
-            label="Email or mobile"
-            placeholder="Email or mobile"
-            value={formState['Mobile or Email'] ?? ''}
-            onChangeText={value =>
-              setFormState(current => ({ ...current, 'Mobile or Email': value }))
-            }
-          />
-          <Input
-            label="Password"
-            placeholder="Password"
-            secureTextEntry
-            value={formState.Password ?? ''}
-            onChangeText={value =>
-              setFormState(current => ({ ...current, Password: value }))
-            }
-          />
+          <View style={styles.authPanel}>
+            <Input
+              label="Email or mobile"
+              placeholder="Email or mobile"
+              value={formState['Mobile or Email'] ?? ''}
+              onChangeText={value =>
+                setFormState(current => ({ ...current, 'Mobile or Email': value }))
+              }
+            />
+            <Input
+              label="Password"
+              placeholder="Password"
+              secureTextEntry
+              value={formState.Password ?? ''}
+              onChangeText={value =>
+                setFormState(current => ({ ...current, Password: value }))
+              }
+            />
 
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => handleAction('Login')}
-            disabled={loading}
-          >
-            <Text style={styles.primaryButtonText}>Login</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => handleAction('Login')}
+              disabled={loading}
+            >
+              <Text style={styles.primaryButtonText}>Login</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.googleButton}
-            onPress={handleGoogleSignIn}
-            disabled={loading}
-          >
-            <Text style={styles.googleIcon}>G</Text>
-            <Text style={styles.googleText}>Continue with Google</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+            >
+              <Text style={styles.googleIcon}>G</Text>
+              <Text style={styles.googleText}>Continue with Google</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => handleAction('Reset Password')}>
-            <Text style={styles.linkText}>Forgot password?</Text>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleAction('Reset Password')}>
+              <Text style={styles.linkText}>Forgot password?</Text>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity onPress={() => onNavigate(4)}>
+          <TouchableOpacity style={styles.authFooterLink} onPress={() => onNavigate(4)}>
             <Text style={styles.createAccountText}>Create account</Text>
           </TouchableOpacity>
 
@@ -234,17 +246,19 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
           <Text style={styles.loginTitle}>Create account</Text>
           <Text style={styles.loginSubtitle}>Open your TradeIQ profile and continue KYC.</Text>
 
-          <Input label="Full name" placeholder="Full name" value={formState['Full name'] ?? ''} onChangeText={value => setFormState(current => ({ ...current, 'Full name': value }))} />
-          <Input label="Mobile" placeholder="10 digit mobile number" keyboardType="number-pad" value={formState.Mobile ?? ''} onChangeText={value => setFormState(current => ({ ...current, Mobile: value }))} />
-          <Input label="Email" placeholder="Email address" value={formState.Email ?? ''} onChangeText={value => setFormState(current => ({ ...current, Email: value }))} />
-          <Input label="PAN" placeholder="ABCDE1234F" value={formState.PAN ?? ''} onChangeText={value => setFormState(current => ({ ...current, PAN: value.toUpperCase() }))} />
-          <Input label="Password" placeholder="Minimum 8 characters" secureTextEntry value={formState.Password ?? ''} onChangeText={value => setFormState(current => ({ ...current, Password: value }))} />
+          <View style={styles.authPanel}>
+            <Input label="Full name" placeholder="Full name" value={formState['Full name'] ?? ''} onChangeText={value => setFormState(current => ({ ...current, 'Full name': value }))} />
+            <Input label="Mobile" placeholder="10 digit mobile number" keyboardType="number-pad" value={formState.Mobile ?? ''} onChangeText={value => setFormState(current => ({ ...current, Mobile: value }))} />
+            <Input label="Email" placeholder="Email address" value={formState.Email ?? ''} onChangeText={value => setFormState(current => ({ ...current, Email: value }))} />
+            <Input label="PAN" placeholder="ABCDE1234F" value={formState.PAN ?? ''} onChangeText={value => setFormState(current => ({ ...current, PAN: value.toUpperCase() }))} />
+            <Input label="Password" placeholder="Minimum 8 characters" secureTextEntry value={formState.Password ?? ''} onChangeText={value => setFormState(current => ({ ...current, Password: value }))} />
 
-          <TouchableOpacity style={styles.primaryButton} onPress={() => handleAction('Create Account')} disabled={loading}>
-            <Text style={styles.primaryButtonText}>Create account</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryButton} onPress={() => handleAction('Create Account')} disabled={loading}>
+              <Text style={styles.primaryButtonText}>Create account</Text>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity onPress={() => onNavigate(5)}>
+          <TouchableOpacity style={styles.authFooterLink} onPress={() => onNavigate(5)}>
             <Text style={styles.createAccountText}>Already have an account? Login</Text>
           </TouchableOpacity>
 
@@ -805,9 +819,21 @@ const styles = StyleSheet.create({
   },
   authLogo: {
     alignSelf: 'center',
-    height: 92,
-    marginBottom: 18,
-    width: 180,
+    height: 104,
+    marginBottom: 16,
+    width: 210,
+  },
+  authPanel: {
+    backgroundColor: '#111925',
+    borderColor: colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+  },
+  authFooterLink: {
+    alignSelf: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
   },
   logoMark: {
     alignItems: 'center',
@@ -822,7 +848,7 @@ const styles = StyleSheet.create({
   logoText: { color: colors.bg, fontSize: 22, fontWeight: '900' },
   loginTitle: {
     color: colors.textStrong,
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '900',
     marginBottom: 8,
     textAlign: 'center',
@@ -899,7 +925,7 @@ const styles = StyleSheet.create({
     marginBottom: 7,
   },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#070B12',
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
@@ -911,7 +937,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.buy,
-    borderRadius: 8,
+    borderRadius: 10,
     marginTop: 6,
     paddingVertical: 15,
   },
@@ -919,7 +945,7 @@ const styles = StyleSheet.create({
   googleButton: {
     alignItems: 'center',
     backgroundColor: colors.textStrong,
-    borderRadius: 8,
+    borderRadius: 10,
     flexDirection: 'row',
     gap: 12,
     justifyContent: 'center',
