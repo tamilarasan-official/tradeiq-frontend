@@ -3,6 +3,8 @@ import axios from 'axios';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,6 +30,64 @@ import type { ScreenSpec } from '../../types/screens';
 import { showToast } from '../../utils/toast';
 
 const tradeIqLogo = require('../../Assets/TradeIQ_logo_v3.png');
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const issues = error.response?.data?.issues;
+    if (Array.isArray(issues) && issues[0]?.message) {
+      return String(issues[0].message);
+    }
+
+    const message = error.response?.data?.message;
+    if (typeof message === 'string') {
+      return message;
+    }
+  }
+
+  return error instanceof Error ? error.message : fallback;
+}
+
+function validateLoginForm(formState: Record<string, string>) {
+  if (!(formState['Mobile or Email'] ?? '').trim()) {
+    return 'Enter email or mobile number';
+  }
+
+  if (!(formState.Password ?? '').trim()) {
+    return 'Enter password';
+  }
+
+  return null;
+}
+
+function validateRegisterForm(formState: Record<string, string>) {
+  const fullName = (formState['Full name'] ?? '').trim();
+  const mobile = (formState.Mobile ?? '').trim();
+  const email = (formState.Email ?? '').trim();
+  const pan = (formState.PAN ?? '').trim().toUpperCase();
+  const password = formState.Password ?? '';
+
+  if (fullName.length < 3) {
+    return 'Full name must be at least 3 characters';
+  }
+
+  if (!/^[6-9]\d{9}$/.test(mobile)) {
+    return 'Enter a valid 10 digit Indian mobile number';
+  }
+
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    return 'Enter a valid email address';
+  }
+
+  if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(pan)) {
+    return 'Enter PAN in format ABCDE1234F';
+  }
+
+  if (password.length < 8) {
+    return 'Password must be at least 8 characters';
+  }
+
+  return null;
+}
 
 type Props = {
   screen: ScreenSpec;
@@ -87,6 +147,12 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
       }
 
       if (screen.id === 5 && action.toLowerCase() === 'login') {
+        const validationError = validateLoginForm(formState);
+        if (validationError) {
+          showToast(validationError);
+          return;
+        }
+
         const user = await loginWithPassword(
           formState['Mobile or Email'] ?? '',
           formState.Password ?? '',
@@ -97,11 +163,17 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
       }
 
       if (screen.id === 4 && action.toLowerCase() === 'create account') {
+        const validationError = validateRegisterForm(formState);
+        if (validationError) {
+          showToast(validationError);
+          return;
+        }
+
         const user = await registerWithPassword({
-          fullName: formState['Full name'] ?? '',
-          mobile: formState.Mobile ?? '',
-          email: formState.Email ?? '',
-          panNumber: (formState.PAN ?? '').toUpperCase(),
+          fullName: (formState['Full name'] ?? '').trim(),
+          mobile: (formState.Mobile ?? '').trim(),
+          email: (formState.Email ?? '').trim(),
+          panNumber: (formState.PAN ?? '').trim().toUpperCase(),
           password: formState.Password ?? '',
           studyGroup: 'APP',
         });
@@ -133,8 +205,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
         onNavigate(next);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : `${action} failed`;
-      showToast(message);
+      showToast(getApiErrorMessage(error, `${action} failed`));
     } finally {
       setLoading(false);
     }
@@ -155,13 +226,14 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
       if (
         axios.isAxiosError(error) &&
         error.response?.status === 404 &&
-        error.response.data?.code === 'ACCOUNT_REQUIRED'
+        (error.response.data?.code === 'ACCOUNT_REQUIRED' ||
+          String(error.config?.url ?? '').includes('google-login'))
       ) {
         showToast('Create your account before using Google sign-in');
         onNavigate(4);
         return;
       }
-      showToast(error instanceof Error ? error.message : 'Google sign-in failed');
+      showToast(getApiErrorMessage(error, 'Google sign-in failed'));
     } finally {
       setLoading(false);
     }
@@ -181,8 +253,14 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
 
   if (screen.id === 5) {
     return (
-      <View style={styles.wrapper}>
-        <ScrollView contentContainerStyle={styles.loginContent}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.wrapper}
+      >
+        <ScrollView
+          contentContainerStyle={styles.loginContent}
+          keyboardShouldPersistTaps="handled"
+        >
           <Image source={tradeIqLogo} style={styles.authLogo} resizeMode="contain" />
           <Text style={styles.loginTitle}>Welcome back</Text>
           <Text style={styles.loginSubtitle}>Trade, track, and manage your portfolio securely.</Text>
@@ -234,14 +312,20 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
 
           {loading ? <ActivityIndicator color={colors.buy} style={styles.loader} /> : null}
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
   if (screen.id === 4) {
     return (
-      <View style={styles.wrapper}>
-        <ScrollView contentContainerStyle={styles.loginContent}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.wrapper}
+      >
+        <ScrollView
+          contentContainerStyle={styles.registerContent}
+          keyboardShouldPersistTaps="handled"
+        >
           <Image source={tradeIqLogo} style={styles.authLogo} resizeMode="contain" />
           <Text style={styles.loginTitle}>Create account</Text>
           <Text style={styles.loginSubtitle}>Open your TradeIQ profile and continue KYC.</Text>
@@ -264,7 +348,7 @@ export function BaseSpecScreen({ screen, onBack, onNavigate, onLogout }: Props) 
 
           {loading ? <ActivityIndicator color={colors.buy} style={styles.loader} /> : null}
         </ScrollView>
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -816,6 +900,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
+  },
+  registerContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+    paddingBottom: 44,
+    paddingTop: 18,
   },
   authLogo: {
     alignSelf: 'center',
